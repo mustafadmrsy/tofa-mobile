@@ -5,13 +5,13 @@ import { getStorage } from "firebase/storage";
 
 // TODO: Burayı kendi Firebase projenizin değerleriyle doldurun
 const firebaseConfig = {
-  apiKey: "AIzaSyAL63xPKcnwrnKUX4fOhDeDzLHCxDLE-Fs",
-  authDomain: "tofa-mobile.firebaseapp.com",
-  projectId: "tofa-mobile",
-  storageBucket: "tofa-mobile.firebasestorage.app",
-  messagingSenderId: "723015493589",
-  appId: "1:723015493589:web:b222dcec0b31c23b9fbf5c",
-  measurementId: "G-K7L9V2TT0F",
+  apiKey: "AIzaSyBl6ndmUBUMckQJPhjYQPsXNf_mxRZeyN8",
+  authDomain: "tofa-mobile-1020c.firebaseapp.com",
+  projectId: "tofa-mobile-1020c",
+  storageBucket: "tofa-mobile-1020c.firebasestorage.app",
+  messagingSenderId: "803883848105",
+  appId: "1:803883848105:web:f1991737249daf629874b8",
+  measurementId: "G-HYEEVR6VCB",
 };
 
 const isValid = !!firebaseConfig.apiKey && !!firebaseConfig.appId;

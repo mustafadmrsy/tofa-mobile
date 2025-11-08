@@ -11,7 +11,7 @@ import Loader from "../components/Loader";
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
-  const { user, role, loading } = useAuth();
+  const { user, role, verified, loading } = useAuth();
 
   if (loading) return <Loader />;
 
@@ -29,7 +29,9 @@ export default function AppNavigator() {
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
         {!user ? (
           <Stack.Screen name="Auth" component={AuthNavigator} />
-        ) : role === "admin" ? (
+        ) : !verified ? (
+          <Stack.Screen name="Auth" component={AuthNavigator} />
+        ) : (role === "admin" || role === "leader") ? (
           <Stack.Screen name="Admin" component={AdminTabs} />
         ) : role === "superadmin" ? (
           <Stack.Screen name="SuperAdmin" component={SuperAdminTabs} />

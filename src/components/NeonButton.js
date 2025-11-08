@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { ActivityIndicator } from "react-native-paper";
 
 export default function NeonButton({ title, onPress, loading, disabled, style }) {
   const isDisabled = disabled || loading;
@@ -13,7 +14,11 @@ export default function NeonButton({ title, onPress, loading, disabled, style })
           end={{ x: 1, y: 0.5 }}
           style={{ paddingVertical: 14, alignItems: 'center', borderRadius: 16, opacity: isDisabled ? 0.7 : 1 }}
         >
-          <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>{title}</Text>
+          {loading ? (
+            <ActivityIndicator color="#ffffff" size={18} />
+          ) : (
+            <Text style={{ color: 'white', fontWeight: '700', fontSize: 16 }}>{title}</Text>
+          )}
         </LinearGradient>
       </Pressable>
     </View>

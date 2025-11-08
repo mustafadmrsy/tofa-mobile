@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { colors } from "../theme/colors";
 import { useAuth } from "../context/AuthContext";
-import { TextInput, SegmentedButtons } from "react-native-paper";
+import { TextInput, Snackbar } from "react-native-paper";
 import AuthContainer from "../components/AuthContainer";
 import NeonButton from "../components/NeonButton";
 import { Mail, Lock, User as UserIcon, Eye, EyeOff } from "lucide-react-native";
@@ -12,16 +12,20 @@ export default function RegisterScreen({ navigation }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("worker");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const handleRegister = async () => {
     try {
       setSubmitting(true);
       setError("");
-      await register(name.trim(), email.trim(), password, role);
+      setSuccess("");
+      await register(name.trim(), email.trim(), password);
+      setSuccess("Doğrulama e-postası gönderildi. Lütfen e-postanı kontrol et ve doğruladıktan sonra giriş yap.");
+      // Doğrulama sürecinde kullanıcıyı doğrulama ekranına taşı
+      navigation.navigate('VerifyEmail');
     } catch (e) {
       setError(e.message);
     } finally {
@@ -38,6 +42,9 @@ export default function RegisterScreen({ navigation }) {
 
       {!!error && (
         <Text style={{ color: colors.danger, marginBottom: 8 }}>{error}</Text>
+      )}
+      {!!success && (
+        <Text style={{ color: '#22c55e', marginBottom: 8 }}>{success}</Text>
       )}
 
       <View style={{ gap: 12 }}>
@@ -81,16 +88,6 @@ export default function RegisterScreen({ navigation }) {
           right={<TextInput.Icon onPress={() => setShowPassword((s)=>!s)} icon={() => showPassword ? <EyeOff color="#9aa0a6" size={18} /> : <Eye color="#9aa0a6" size={18} />} />}
         />
 
-        <SegmentedButtons
-          value={role}
-          onValueChange={setRole}
-          buttons={[
-            { value: "worker", label: "Görevli" },
-            { value: "admin", label: "Admin" },
-          ]}
-          style={{ marginTop: 12 }}
-        />
-
         <NeonButton title="Create account" onPress={handleRegister} loading={submitting} disabled={submitting} style={{ marginTop: 16 }} />
 
         <View style={{ alignItems: 'center', marginTop: 18 }}>
@@ -100,6 +97,19 @@ export default function RegisterScreen({ navigation }) {
           </Pressable>
         </View>
       </View>
+
+      <Snackbar
+        visible={!!error}
+        onDismiss={() => setError("")}
+        duration={4000}
+        style={{ backgroundColor: '#ef4444' }}
+      >{error}</Snackbar>
+      <Snackbar
+        visible={!!success}
+        onDismiss={() => setSuccess("")}
+        duration={5000}
+        style={{ backgroundColor: '#22c55e' }}
+      >{success}</Snackbar>
     </AuthContainer>
   );
 }

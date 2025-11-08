@@ -2,17 +2,18 @@ import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { colors } from "../theme/colors";
 import { useAuth } from "../context/AuthContext";
-import { TextInput, Divider } from "react-native-paper";
+import { TextInput, Divider, Snackbar } from "react-native-paper";
 import AuthContainer from "../components/AuthContainer";
 import NeonButton from "../components/NeonButton";
 import { Mail, Lock, Eye, EyeOff, Fingerprint, Smile } from "lucide-react-native";
 
 export default function LoginScreen({ navigation }) {
-  const { login, demoLogin } = useAuth();
+  const { login, demoLogin, resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const inputStyle = { backgroundColor: 'transparent', borderRadius: 14 };
   const outlineColor = '#2a2e3f';
@@ -23,6 +24,7 @@ export default function LoginScreen({ navigation }) {
     try {
       setSubmitting(true);
       setError("");
+      setSuccess("");
       await login(email.trim(), password);
     } catch (e) {
       setError(e.message);
@@ -79,8 +81,10 @@ export default function LoginScreen({ navigation }) {
           <Pressable onPress={async () => {
             try {
               setError('');
+              setSuccess('');
               if (!email) throw new Error('Enter your email first');
-              // optional: useAuth.resetPassword
+              await resetPassword(email.trim());
+              setSuccess('Şifre sıfırlama e-postası gönderildi.');
             } catch (e) {
               setError(e.message);
             }
@@ -118,6 +122,18 @@ export default function LoginScreen({ navigation }) {
           <Text style={{ color: '#9aa0a6', marginTop: 4 }}>Terms • Privacy Policy</Text>
         </View>
       </View>
+      <Snackbar
+        visible={!!error}
+        onDismiss={() => setError("")}
+        duration={4000}
+        style={{ backgroundColor: '#ef4444' }}
+      >{error}</Snackbar>
+      <Snackbar
+        visible={!!success}
+        onDismiss={() => setSuccess("")}
+        duration={4000}
+        style={{ backgroundColor: '#22c55e' }}
+      >{success}</Snackbar>
     </AuthContainer>
   );
 }
