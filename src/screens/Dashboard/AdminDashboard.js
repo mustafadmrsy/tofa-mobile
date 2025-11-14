@@ -5,10 +5,9 @@ import { colors } from "../../theme/colors";
 import { PlusCircle, Users } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../../context/AuthContext";
-import { listLeaderTeams } from "../../services/teams";
-import { listTasksByTeamIds } from "../../services/tasks";
+import { listLeaderTeams, listUserTeams, listAllTeams } from "../../services/teams";
+import { listTasksByTeamIds, listAllTasks } from "../../services/tasks";
 import { listUsers } from "../../services/users";
-import { listUserTeams } from "../../services/teams";
 
 export default function AdminDashboard({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -35,13 +34,43 @@ export default function AdminDashboard({ navigation }) {
       let tms = await listLeaderTeams(user.uid);
       if (!tms || tms.length === 0) {
         // Fallback: kullanıcı bir takımda üye olabilir
-        tms = await listUserTeams(user.uid);
+        try {
+          tms = await listUserTeams(user.uid);
+        } catch {}
+      }
+      if (!tms || tms.length === 0) {
+        // Son çare: tüm takımları çekip leaderId/memberIds içinde arama
+        try {
+          const all = await listAllTeams();
+          tms = all.filter(t => t.leaderId === user.uid || (t.memberIds || []).includes(user.uid));
+        } catch {}
       }
       setTeams(tms);
       const us = await listUsers();
       setUsers(us);
-      const teamIds = tms.map(t=>t.id);
-      const ts = await listTasksByTeamIds(teamIds);
+
+      // Takım görevlerini hem teamId hem de assigneeId (takım üyeleri) üzerinden topla
+      const teamIds = (tms || []).map(t=>t.id);
+      const memberIdSet = new Set();
+      (tms || []).forEach(t => {
+        if (t.leaderId) memberIdSet.add(t.leaderId);
+        (t.memberIds || []).forEach(id => memberIdSet.add(id));
+      });
+
+      let ts = [];
+      try {
+        const allTasks = await listAllTasks();
+        ts = allTasks.filter(task => {
+          const inTeam = task.teamId && teamIds.includes(task.teamId);
+          const byMember = task.assigneeId && memberIdSet.has(task.assigneeId);
+          return inTeam || byMember;
+        });
+      } catch {
+        // Fallback: eski davranışa dön, sadece teamId üzerinden çek
+        if (teamIds.length > 0) {
+          ts = await listTasksByTeamIds(teamIds);
+        }
+      }
       setTasks(ts);
     } finally { setLoading(false); }
   };
@@ -80,117 +109,168 @@ export default function AdminDashboard({ navigation }) {
     return { overdue, upcoming };
   }, [tasks, warnDays]);
 
+  const overdueCount = overdueAndUpcoming.overdue.length;
+
+  // Ekip durumu için: mevcut takımdaki üyeleri bul ve aktif görev sayılarını hesapla
+  const primaryTeam = teams[0] || null;
+  const teamMemberIds = primaryTeam ? Array.from(new Set([primaryTeam.leaderId, ...(primaryTeam.memberIds || [])].filter(Boolean))) : [];
+  const teamMembers = teamMemberIds.map(id => ({ id, name: userMap[id] || id }));
+  const memberSummaries = teamMembers.map(m => {
+    const assigned = tasks.filter(t => t.assigneeId === m.id);
+    const active = assigned.filter(t => (t.status || '').toLowerCase() !== 'done').length;
+    return { ...m, active };
+  }).sort((a,b) => b.active - a.active).slice(0, 4);
+
+  const formatDueDiff = (task) => {
+    if (!task.dueDate) return null;
+    const dueMs = task.dueDate.seconds ? task.dueDate.seconds*1000 : task.dueDate;
+    const diffDays = Math.round((dueMs - Date.now()) / (24*60*60*1000));
+    if (isNaN(diffDays)) return null;
+    if (diffDays === 0) return 'Son: bugün';
+    if (diffDays > 0) return `Son: ${diffDays} gün`;
+    return `Son: ${Math.abs(diffDays)} gün önce`;
+  };
+
+  const getPriorityLabel = (t) => (t.priority || '').toLowerCase();
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingTop: insets.top + 8, paddingBottom: 40 }}>
       {/* Başlık banner */}
-      <View style={{ marginBottom: 16 }}>
-        <LinearGradient colors={["#14122b", "#0b0d16"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 18, padding: 16, borderWidth: 1, borderColor: "#1f2233" }}>
-          <Text style={{ color: "#b39bff", fontSize: 12, letterSpacing: 1 }}>PANEL</Text>
-          <Text style={{ color: "#e6e6e6", fontSize: 24, fontWeight: "900", marginTop: 6 }}>Lider Dashboard</Text>
-          <Text style={{ color: "#9aa0a6", marginTop: 4 }}>Ekibinin görevlerini yönet</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap:'wrap' }}>
-            <View style={{ borderRadius: 999, borderWidth: 1, borderColor: "#2a2e3f", paddingVertical: 6, paddingHorizontal: 10 }}>
-              <Text style={{ color: "#a78bfa", fontWeight: '700' }}>Takım: {teams[0]?.name || '-'}</Text>
-            </View>
-            <View style={{ borderRadius: 999, borderWidth: 1, borderColor: "#2a2e3f", paddingVertical: 6, paddingHorizontal: 10 }}>
-              <Text style={{ color: "#67e8f9", fontWeight: '700' }}>Üye: {teams[0]?.memberIds?.length || 0}</Text>
-            </View>
+      <LinearGradient
+        colors={["#18122b", "#240046"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#312e81", marginBottom: 16 }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <Text style={{ color: '#f9fafb', fontSize: 22, fontWeight: '900' }}>{user?.displayName || user?.email || 'Admin'}</Text>
+            <Text style={{ color: '#c4b5fd', marginTop: 4 }}>Ekip Yönetimi</Text>
           </View>
-        </LinearGradient>
-      </View>
-
-      {/* İstatistik kutuları */}
-      <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
-        <NeonCard border="#8b5cf6">
-          <Text style={{ color: "#9aa0a6" }}>Toplam Görev</Text>
-          <Text style={{ color: "#22d3ee", fontSize: 22, fontWeight: "900", marginTop: 6 }}>{stats.total}</Text>
-        </NeonCard>
-        <NeonCard border="#2a2e3f">
-          <Text style={{ color: "#9aa0a6" }}>Aktif</Text>
-          <Text style={{ color: "#e6e6e6", fontSize: 22, fontWeight: "900", marginTop: 6 }}>{stats.active}</Text>
-        </NeonCard>
-        <NeonCard border="#2a2e3f">
-          <Text style={{ color: "#9aa0a6" }}>Tamamlandı</Text>
-          <Text style={{ color: "#22c55e", fontSize: 22, fontWeight: "900", marginTop: 6 }}>{stats.done}</Text>
-        </NeonCard>
-      </View>
-
-      {/* Hızlı aksiyonlar */}
-      <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>
-        <LinearGradient colors={["#1a1530", "#0b0d16"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, borderRadius: 14 }}>
-          <Pressable onPress={() => navigation.navigate("Görev Oluştur")} style={{ flex: 1, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#2a2e3f", alignItems: "center", justifyContent: "center" }}>
-            <PlusCircle color="#e6e6e6" />
-            <Text style={{ color: "#e6e6e6", marginTop: 8, fontWeight: "600" }}>Görev Oluştur</Text>
-          </Pressable>
-        </LinearGradient>
-        <LinearGradient colors={["#0c2b33", "#0b0d16"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, borderRadius: 14 }}>
-          <Pressable onPress={() => navigation.navigate("Ekibim")} style={{ flex: 1, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: "#2a2e3f", alignItems: "center", justifyContent: "center" }}>
-            <Users color="#e6e6e6" />
-            <Text style={{ color: "#e6e6e6", marginTop: 8, fontWeight: "600" }}>Ekibi Yönet</Text>
-          </Pressable>
-        </LinearGradient>
-      </View>
-
-      {/* Görev Listesi */}
-      <Text style={{ color: "#9aa0a6", marginBottom: 8 }}>Son Görevler</Text>
-      <NeonCard border="#1f2233">
-        <View style={{ gap: 12 }}>
-          {recentTasks.map(item => (
-          <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={()=>navigation.navigate('TaskDetail', { taskId: item.id })} style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#2a2e3f", backgroundColor: "#0d0f1a" }}>
-            <Text style={{ color: "#22d3ee", fontWeight: "800" }}>{item.title}</Text>
-            {!!item.description && <Text style={{ color: "#9aa0a6", marginTop: 4 }}>{item.description}</Text>}
-            <View style={{ flexDirection: 'row', gap: 10, flexWrap:'wrap', marginTop: 8 }}>
-              <Text style={{ color: '#9aa0a6' }}>Atanan: <Text style={{ color: '#e6e6e6' }}>{item.assigneeId ? (userMap[item.assigneeId] || item.assigneeId) : '-'}</Text></Text>
-              <Text style={{ color: '#9aa0a6' }}>Durum: <Text style={{ color: '#e6e6e6' }}>{item.status}</Text></Text>
-              <Text style={{ color: '#9aa0a6' }}>Tarih: <Text style={{ color: '#e6e6e6' }}>{item.dueDate ? new Date(item.dueDate.seconds ? item.dueDate.seconds*1000 : item.dueDate).toLocaleDateString() : '-'}</Text></Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-        {(!loading && recentTasks.length===0) && <Text style={{ color: '#9aa0a6' }}>Görev bulunamadı</Text>}
+          {/* Profil avatar placeholder */}
+          <View style={{ width: 40, height: 40, borderRadius: 999, backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#6366f1' }}>
+            <Text style={{ color: '#e5e7eb', fontWeight: '800' }}>{(user?.displayName || user?.email || 'A').charAt(0).toUpperCase()}</Text>
+          </View>
         </View>
-      </NeonCard>
 
-      {/* Uyarı eşiği ayarı */}
-      <View style={{ marginTop: 20, marginBottom: 8 }}>
-        <Text style={{ color: '#9aa0a6', marginBottom: 8 }}>Uyarı Eşiği (Yaklaşan): {warnDays} gün</Text>
-        <View style={{ flexDirection:'row', gap: 8 }}>
-          {[3,7,14].map(d => (
-            <Pressable key={d} onPress={()=>setWarnDays(d)} style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: warnDays===d ? '#8b5cf6' : '#2a2e3f', backgroundColor: warnDays===d ? '#111426' : 'transparent' }}>
-              <Text style={{ color: '#e6e6e6', fontWeight:'600' }}>{d}g</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+          <View style={{ flex: 1, borderRadius: 16, padding: 12, backgroundColor: 'rgba(15,23,42,0.85)', borderWidth: 1, borderColor: '#22c55e' }}>
+            <Text style={{ color: '#9ca3af', fontSize: 12 }}>Aktif</Text>
+            <Text style={{ color: '#bbf7d0', fontSize: 22, fontWeight: '900', marginTop: 4 }}>{stats.active}</Text>
+          </View>
+          <View style={{ flex: 1, borderRadius: 16, padding: 12, backgroundColor: 'rgba(24,16,32,0.95)', borderWidth: 1, borderColor: '#f97373' }}>
+            <Text style={{ color: '#fecaca', fontSize: 12 }}>Gecikmiş</Text>
+            <Text style={{ color: '#fecaca', fontSize: 22, fontWeight: '900', marginTop: 4 }}>{overdueCount}</Text>
+          </View>
+          <View style={{ flex: 1, borderRadius: 16, padding: 12, backgroundColor: 'rgba(15,23,42,0.85)', borderWidth: 1, borderColor: '#4ade80' }}>
+            <Text style={{ color: '#bbf7d0', fontSize: 12 }}>Tamamlanan</Text>
+            <Text style={{ color: '#bbf7d0', fontSize: 22, fontWeight: '900', marginTop: 4 }}>{stats.done}</Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      {/* Son Görevler */}
+      <View style={{ marginBottom: 16 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Text style={{ color: '#e5e7eb', fontWeight: '700' }}>Son Görevler</Text>
+          <Text style={{ color: '#a855f7', fontSize: 12 }}>Tümünü Gör</Text>
+        </View>
+        <NeonCard border="#272448" bg="#0f172a">
+          <View style={{ gap: 10 }}>
+            {recentTasks.slice(0, 3).map(item => {
+              const assigneeName = item.assigneeId ? (userMap[item.assigneeId] || item.assigneeId) : '-';
+              const dueText = formatDueDiff(item);
+              const priority = getPriorityLabel(item);
+              const priorityColor = priority === 'high' ? '#f97373' : priority === 'low' ? '#4ade80' : '#facc15';
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.92}
+                  onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })}
+                  style={{ padding: 12, borderRadius: 14, borderWidth: 1, borderColor: '#1f2937', backgroundColor: '#020617' }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#e5e7eb', fontWeight: '800' }}>{item.title}</Text>
+                      <Text style={{ color: '#9ca3af', marginTop: 2, fontSize: 12 }}>{assigneeName}’a atandı</Text>
+                    </View>
+                    {/* Durum ikonu yerine renkli nokta */}
+                    <View style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: (item.status || '').toLowerCase() === 'done' ? '#22c55e' : '#f97316' }} />
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                    {!!priority && (
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(15,23,42,0.9)', borderWidth: 1, borderColor: priorityColor }}>
+                        <Text style={{ color: priorityColor, fontSize: 11, fontWeight: '700' }}>{priority === 'high' ? 'Yüksek' : priority === 'low' ? 'Düşük' : 'Orta'}</Text>
+                      </View>
+                    )}
+                    {!!dueText && (
+                      <Text style={{ color: '#9ca3af', fontSize: 11 }}>{dueText}</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            {(!loading && recentTasks.length === 0) && (
+              <Text style={{ color: '#9aa0a6' }}>Görev bulunamadı</Text>
+            )}
+          </View>
+        </NeonCard>
+      </View>
+
+      {/* Ekip Durumu */}
+      <View style={{ marginBottom: 18 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Text style={{ color: '#e5e7eb', fontWeight: '700' }}>Ekip Durumu</Text>
+          <Text style={{ color: '#a855f7', fontSize: 12 }}>Detay</Text>
+        </View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+          {memberSummaries.map(m => {
+            const initials = (m.name || '').split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase() || 'U';
+            return (
+              <View key={m.id} style={{ width: '48%', borderRadius: 16, padding: 10, backgroundColor: '#020617', borderWidth: 1, borderColor: '#1f2937' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#6366f1' }}>
+                    <Text style={{ color: '#e5e7eb', fontWeight: '800', fontSize: 13 }}>{initials}</Text>
+                  </View>
+                  <View>
+                    <Text style={{ color: '#e5e7eb', fontSize: 13, fontWeight: '700' }}>{m.name}</Text>
+                    <Text style={{ color: '#9ca3af', fontSize: 11 }}>{m.active} aktif görev</Text>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+          {(!loading && memberSummaries.length === 0) && (
+            <Text style={{ color: '#9aa0a6' }}>Bu ekip için üye bulunamadı.</Text>
+          )}
+        </View>
+      </View>
+
+      {/* Hızlı İşlemler */}
+      <View>
+        <Text style={{ color: '#e5e7eb', fontWeight: '700', marginBottom: 8 }}>Hızlı İşlemler</Text>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <LinearGradient colors={["#f973c6", "#fb7185"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, borderRadius: 18 }}>
+            <Pressable
+              onPress={() => navigation.navigate('Görev Oluştur')}
+              style={{ flex: 1, borderRadius: 18, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <PlusCircle color="#f9fafb" />
+              <Text style={{ color: '#f9fafb', marginTop: 6, fontWeight: '700' }}>Yeni Görev</Text>
             </Pressable>
-          ))}
+          </LinearGradient>
+          <LinearGradient colors={["#22c1c3", "#0ea5e9"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1, borderRadius: 18 }}>
+            <Pressable
+              onPress={() => navigation.navigate('Ekibim')}
+              style={{ flex: 1, borderRadius: 18, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Users color="#0f172a" />
+              <Text style={{ color: '#0f172a', marginTop: 6, fontWeight: '700' }}>Ekip Ekranı</Text>
+            </Pressable>
+          </LinearGradient>
         </View>
       </View>
-
-      {/* Tarihi Geçmiş */}
-      <Text style={{ color: '#f87171', marginTop: 12, marginBottom: 8, fontWeight:'700' }}>Tarihi Geçmiş</Text>
-      <NeonCard border="#3b1f22" bg="#120b0d">
-        <View style={{ gap: 10 }}>
-        {overdueAndUpcoming.overdue.map(item => (
-          <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={()=>navigation.navigate('TaskDetail', { taskId: item.id })} style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#3b1f22', backgroundColor: '#170e10' }}>
-            <Text style={{ color: '#fca5a5', fontWeight:'800' }}>{item.title}</Text>
-            <Text style={{ color: '#9aa0a6', marginTop: 4 }}>Atanan: <Text style={{ color:'#e6e6e6' }}>{item.assigneeId ? (userMap[item.assigneeId] || item.assigneeId) : '-'}</Text></Text>
-            <Text style={{ color: '#9aa0a6' }}>Son Tarih: <Text style={{ color:'#e6e6e6' }}>{item.dueDate ? new Date(item.dueDate.seconds ? item.dueDate.seconds*1000 : item.dueDate).toLocaleDateString() : '-'}</Text></Text>
-          </TouchableOpacity>
-        ))}
-        {(!loading && overdueAndUpcoming.overdue.length===0) && <Text style={{ color:'#9aa0a6' }}>Tarihi geçmiş görev yok</Text>}
-        </View>
-      </NeonCard>
-
-      {/* Yaklaşan */}
-      <Text style={{ color: '#fde68a', marginTop: 16, marginBottom: 8, fontWeight:'700' }}>Yaklaşan</Text>
-      <NeonCard border="#3b3321" bg="#14120c">
-        <View style={{ gap: 10, marginBottom: 4 }}>
-        {overdueAndUpcoming.upcoming.map(item => (
-          <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={()=>navigation.navigate('TaskDetail', { taskId: item.id })} style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#3b3321', backgroundColor: '#14120c' }}>
-            <Text style={{ color: '#fde68a', fontWeight:'800' }}>{item.title}</Text>
-            <Text style={{ color: '#9aa0a6', marginTop: 4 }}>Atanan: <Text style={{ color:'#e6e6e6' }}>{item.assigneeId ? (userMap[item.assigneeId] || item.assigneeId) : '-'}</Text></Text>
-            <Text style={{ color: '#9aa0a6' }}>Son Tarih: <Text style={{ color:'#e6e6e6' }}>{item.dueDate ? new Date(item.dueDate.seconds ? item.dueDate.seconds*1000 : item.dueDate).toLocaleDateString() : '-'}</Text></Text>
-          </TouchableOpacity>
-        ))}
-        {(!loading && overdueAndUpcoming.upcoming.length===0) && <Text style={{ color:'#9aa0a6' }}>Yaklaşan görev yok</Text>}
-        </View>
-      </NeonCard>
     </ScrollView>
   );
 }

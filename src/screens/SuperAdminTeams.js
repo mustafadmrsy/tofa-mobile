@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Pressable } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme/colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { TextInput, Button, Snackbar } from "react-native-paper";
+import { TextInput, Button, Snackbar, Portal, Modal } from "react-native-paper";
+import { Plus, Eye, Pencil } from "lucide-react-native";
 import { createTeamAutoId, listAllTeams, setTeamLeader, addTeamMember, removeTeamMember } from "../services/teams";
 import { listUsers, updateUserRole, updateUserTeam } from "../services/users";
 
@@ -16,10 +18,32 @@ export default function SuperAdminTeams() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [leaderDropdownOpen, setLeaderDropdownOpen] = useState(false);
 
   const userMap = useMemo(() => {
     const m = {}; users.forEach(u => { m[u.id] = u.name || u.email || u.uid; }); return m;
   }, [users]);
+
+  const filteredTeams = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return teams.filter(t => {
+      if (q && !(t.name || "").toLowerCase().includes(q)) return false;
+      if (filter === "large" && (!t.memberIds || t.memberIds.length < 5)) return false;
+      // "active" filtresi için şimdilik ekstra sorgu yok; tüm takımları gösteriyoruz
+      return true;
+    });
+  }, [teams, search, filter]);
+
+  const getInitials = (user) => {
+    const base = user?.name || user?.email || "?";
+    const parts = base.split(" ");
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  };
 
   const load = async () => {
     setLoading(true);
@@ -102,77 +126,336 @@ export default function SuperAdminTeams() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingTop: insets.top + 8, paddingBottom: 40 }}>
-      <Text style={{ color: '#8b5cf6', fontSize: 22, fontWeight: '900', marginBottom: 12 }}>Ekipler</Text>
+      {/* Header with + button */}
+      <LinearGradient
+        colors={["#1f1247", "#2d0f5f"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 16, borderWidth: 1, borderColor: '#4c1d95' }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ color: '#f9fafb', fontSize: 18, fontWeight: '800' }}>Teams</Text>
+          <Pressable
+            onPress={() => setCreateOpen(true)}
+            style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: '#ec4899', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Plus color="#f9fafb" size={18} />
+          </Pressable>
+        </View>
+      </LinearGradient>
 
-      <View style={{ borderWidth: 1, borderColor: '#8b5cf6', borderRadius: 14, padding: 12, marginBottom: 16, backgroundColor: '#0b0d16', shadowColor: '#8b5cf6', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } }}>
-        <Text style={{ color: '#8b5cf6', fontWeight: '900', marginBottom: 6 }}>Yeni Ekip Oluştur</Text>
-        <TextInput mode="outlined" placeholder="Ekip adı" value={name} onChangeText={setName} style={{ marginBottom: 8 }} />
-        <Button mode="contained" onPress={handleCreate} loading={creating} disabled={creating}>Oluştur</Button>
+      {/* Search */}
+      <TextInput
+        mode="outlined"
+        placeholder="Takım ara..."
+        value={search}
+        onChangeText={setSearch}
+        style={{ marginBottom: 10, backgroundColor: 'transparent', borderRadius: 14 }}
+        outlineColor={'#1f2937'}
+        activeOutlineColor={'#6366f1'}
+        textColor={'#e5e7eb'}
+        placeholderTextColor={'#6b7280'}
+      />
+
+      {/* Filters */}
+      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+        {[
+          { k: 'all', label: 'All Teams' },
+          { k: 'active', label: 'Active' },
+          { k: 'large', label: 'Large Teams' },
+        ].map(btn => (
+          <Pressable
+            key={btn.k}
+            onPress={() => setFilter(btn.k)}
+            style={{
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              backgroundColor: filter === btn.k ? '#111827' : 'transparent',
+              borderWidth: 1,
+              borderColor: filter === btn.k ? '#6366f1' : '#1f2937',
+            }}
+          >
+            <Text style={{ color: '#e5e7eb', fontSize: 12, fontWeight: '600' }}>{btn.label}</Text>
+          </Pressable>
+        ))}
       </View>
 
-      <Text style={{ color: colors.textSecondary, marginBottom: 8 }}>Mevcut Ekipler</Text>
-      {(!teams || teams.length === 0) && !loading ? (
+      {(!filteredTeams || filteredTeams.length === 0) && !loading ? (
         <Text style={{ color: colors.textSecondary }}>Henüz ekip yok</Text>
       ) : (
         <View>
-          {teams.map(team => (
-            <View key={team.id} style={{ padding: 14, borderWidth: 1, borderColor: '#1f2233', borderRadius: 16, marginBottom: 12, backgroundColor: '#0b0d16', shadowColor: '#8b5cf6', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } }}>
-              <TouchableOpacity onPress={() => setSelectedTeam(team)}>
-                <Text style={{ color: '#22d3ee', fontWeight: '800', fontSize: 16 }}>{team.name}</Text>
-                <Text style={{ color: colors.textSecondary, marginTop: 4 }}>Lider: <Text style={{ color: '#e6e6e6' }}>{team.leaderId ? (userMap[team.leaderId] || team.leaderId) : '-'}</Text></Text>
-                <Text style={{ color: colors.textSecondary }}>Üye sayısı: <Text style={{ color: colors.textPrimary }}>{team.memberIds ? team.memberIds.length : 0}</Text></Text>
-              </TouchableOpacity>
-              {selectedTeam && selectedTeam.id === team.id && (
-                <View style={{ marginTop: 10, borderTopWidth: 1, borderTopColor: '#1f2233', paddingTop: 10 }}>
-                  <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>Lider ata</Text>
-                  <View style={{ maxHeight: 160, borderWidth: 1, borderColor: '#8b5cf6', borderRadius: 12 }}>
-                    <ScrollView>
-                      {users.map(u => (
-                        <TouchableOpacity key={u.id} onPress={() => handleSetLeader(team, u.id)} style={{ padding: 10, backgroundColor: (team.leaderId===u.id) ? '#111426' : 'transparent' }}>
-                          <Text style={{ color: '#e6e6e6' }}>{u.name || u.email || u.uid}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
+          {filteredTeams.map(team => {
+            const leaderUser = users.find(u => u.id === team.leaderId);
+            const memberIds = Array.from(new Set([team.leaderId, ...(team.memberIds || [])].filter(Boolean)));
+            const memberUsers = memberIds
+              .map(id => users.find(u => u.id === id))
+              .filter(Boolean);
+            const visibleMembers = memberUsers.slice(0, 3);
+            const extraCount = memberUsers.length > 3 ? memberUsers.length - 3 : 0;
+            const activeTasksCount = 0; // placeholder
 
-                  <Text style={{ color: colors.textSecondary, marginTop: 12, marginBottom: 6 }}>Üyeler</Text>
-                  <View style={{ borderWidth: 1, borderColor: '#1f2233', borderRadius: 12 }}>
-                    <ScrollView>
-                      {(() => {
-                        const memberIds = Array.from(new Set([team.leaderId, ...(team.memberIds || [])].filter(Boolean)));
-                        return memberIds.map(uid => (
-                          <View key={uid} style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#1f2233', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={{ color: uid===team.leaderId ? '#22d3ee' : '#e6e6e6', fontWeight: uid===team.leaderId ? '800' : '600' }}>{userMap[uid] || uid}{uid===team.leaderId ? ' (Lider)' : ''}</Text>
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                              {uid!==team.leaderId && (
-                                <Button compact mode="outlined" onPress={() => handleRemoveMember(team, uid)}>Çıkar</Button>
-                              )}
-                            </View>
-                          </View>
-                        ));
-                      })()}
-                    </ScrollView>
-                  </View>
-
-                  <Text style={{ color: colors.textSecondary, marginTop: 12, marginBottom: 6 }}>Üye ekle</Text>
-                  <View style={{ borderWidth: 1, borderColor: '#1f2233', borderRadius: 12 }}>
-                    <ScrollView>
-                      {users.filter(u => !(team.memberIds||[]).includes(u.id) && u.id !== team.leaderId).map(u => (
-                        <TouchableOpacity key={u.id} onPress={() => handleAddMember(team, u.id)} style={{ padding: 10 }}>
-                          <Text style={{ color: '#e6e6e6' }}>{u.name || u.email || u.uid}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
+            return (
+              <LinearGradient
+                key={team.id}
+                colors={["#1f1247", "#2d0f5f"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  borderRadius: 20,
+                  padding: 16,
+                  marginBottom: 14,
+                  borderWidth: 1,
+                  borderColor: "#4c1d95",
+                }}
+              >
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <Text style={{ color: "#f9fafb", fontSize: 16, fontWeight: "800" }}>{team.name}</Text>
+                  <View style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: "#4b226b", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: "#e5e7eb", fontSize: 16 }}>⋮</Text>
                   </View>
                 </View>
-              )}
-            </View>
-          ))}
+
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: "#111827", alignItems: "center", justifyContent: "center", marginRight: 10 }}>
+                    <Text style={{ color: "#e5e7eb", fontSize: 12, fontWeight: "700" }}>{leaderUser ? getInitials(leaderUser) : "?"}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text style={{ color: "#f9fafb", fontWeight: "600", marginRight: 8 }}>{leaderUser ? (leaderUser.name || leaderUser.email || leaderUser.uid) : "Lider yok"}</Text>
+                    {leaderUser && (
+                      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: "#4c1d95" }}>
+                        <Text style={{ color: "#e5e7eb", fontSize: 11, fontWeight: "600" }}>Leader</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: "row", marginBottom: 12 }}>
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#251457",
+                      borderRadius: 14,
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Text style={{ color: "#e5e7eb", fontSize: 11 }}>Members</Text>
+                    <Text style={{ color: "#f9fafb", fontSize: 18, fontWeight: "800" }}>{memberIds.length}</Text>
+                  </View>
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#251457",
+                      borderRadius: 14,
+                      paddingVertical: 8,
+                      paddingHorizontal: 10,
+                    }}
+                  >
+                    <Text style={{ color: "#e5e7eb", fontSize: 11 }}>Active Tasks</Text>
+                    <Text style={{ color: "#f9fafb", fontSize: 18, fontWeight: "800" }}>{activeTasksCount}</Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
+                  {visibleMembers.map((u, idx) => (
+                    <View
+                      key={u.id}
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 999,
+                        backgroundColor: "#111827",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        marginRight: idx === visibleMembers.length - 1 ? 0 : -8,
+                        borderWidth: 2,
+                        borderColor: "#1f1247",
+                      }}
+                    >
+                      <Text style={{ color: "#e5e7eb", fontSize: 11, fontWeight: "700" }}>{getInitials(u)}</Text>
+                    </View>
+                  ))}
+                  {extraCount > 0 && (
+                    <Text style={{ color: "#e5e7eb", marginLeft: 8, fontSize: 12, fontWeight: "600" }}>+{extraCount}</Text>
+                  )}
+                </View>
+
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Pressable
+                    onPress={() => {
+                      setSelectedTeam(team);
+                      setDetailsOpen(true);
+                      setLeaderDropdownOpen(false);
+                    }}
+                    style={{
+                      flex: 1,
+                      borderRadius: 999,
+                      overflow: "hidden",
+                      marginRight: 10,
+                    }}
+                  >
+                    <LinearGradient
+                      colors={["#ec4899", "#6366f1"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={{ paddingVertical: 10, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 }}
+                    >
+                      <Eye color="#f9fafb" size={16} />
+                      <Text style={{ color: "#f9fafb", fontWeight: "700", fontSize: 13 }}>View Details</Text>
+                    </LinearGradient>
+                  </Pressable>
+
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 999,
+                      borderWidth: 1,
+                      borderColor: "#4b226b",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#1e103a",
+                    }}
+                  >
+                    <Pencil color="#e5e7eb" size={18} />
+                  </View>
+                </View>
+              </LinearGradient>
+            );
+          })}
         </View>
       )}
 
       <Snackbar visible={!!error} onDismiss={()=>setError("")} duration={4000} style={{ backgroundColor: '#ef4444', marginTop: 12 }}>{error}</Snackbar>
       <Snackbar visible={!!success} onDismiss={()=>setSuccess("")} duration={3000} style={{ backgroundColor: '#22c55e', marginTop: 12 }}>{success}</Snackbar>
+
+      <Portal>
+        <Modal
+          visible={createOpen}
+          onDismiss={() => setCreateOpen(false)}
+          contentContainerStyle={{ margin: 16, borderRadius: 16, backgroundColor: '#0b0d16', padding: 16, borderWidth: 1, borderColor: '#8b5cf6' }}
+        >
+          <Text style={{ color: '#f9fafb', fontSize: 16, fontWeight: '800', marginBottom: 8 }}>Yeni Ekip Oluştur</Text>
+          <TextInput
+            mode="outlined"
+            placeholder="Ekip adı"
+            value={name}
+            onChangeText={setName}
+            style={{ marginBottom: 12 }}
+          />
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+            <Button mode="text" onPress={() => { setCreateOpen(false); }}>İptal</Button>
+            <Button mode="contained" onPress={handleCreate} loading={creating} disabled={creating}>Oluştur</Button>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={!!selectedTeam && detailsOpen}
+          onDismiss={() => { setDetailsOpen(false); setSelectedTeam(null); setLeaderDropdownOpen(false); }}
+          contentContainerStyle={{ margin: 16, borderRadius: 18, backgroundColor: '#020617', padding: 16, borderWidth: 1, borderColor: '#4c1d95' }}
+        >
+          {selectedTeam && (
+            <View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: selectedTeam.color || '#8b5cf6', marginRight: 8 }} />
+                  <Text style={{ color: '#f9fafb', fontSize: 16, fontWeight: '800' }}>{selectedTeam.name}</Text>
+                </View>
+              </View>
+
+              <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>Lider ata</Text>
+              <Pressable
+                onPress={() => setLeaderDropdownOpen(!leaderDropdownOpen)}
+                style={{
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#4c1d95',
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  backgroundColor: '#020617',
+                  marginBottom: 6,
+                }}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ color: '#e5e7eb' }}>
+                    {selectedTeam.leaderId ? (userMap[selectedTeam.leaderId] || selectedTeam.leaderId) : 'Lider seç'}
+                  </Text>
+                  <Text style={{ color: '#9ca3af', fontSize: 12 }}>{leaderDropdownOpen ? '▲' : '▼'}</Text>
+                </View>
+              </Pressable>
+              {leaderDropdownOpen && (
+                <View style={{ maxHeight: 180, borderRadius: 12, borderWidth: 1, borderColor: '#1f2937', marginBottom: 12 }}>
+                  <ScrollView>
+                    {users.map(u => (
+                      <Pressable
+                        key={u.id}
+                        onPress={async () => {
+                          await handleSetLeader(selectedTeam, u.id);
+                          setLeaderDropdownOpen(false);
+                        }}
+                        style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: selectedTeam.leaderId === u.id ? '#111827' : 'transparent' }}
+                      >
+                        <Text style={{ color: '#e5e7eb' }}>{u.name || u.email || u.uid}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>Üyeler</Text>
+              <View style={{ maxHeight: 200, borderRadius: 12, borderWidth: 1, borderColor: '#1f2937', marginBottom: 12 }}>
+                <ScrollView>
+                  {(() => {
+                    const memberIdsInner = Array.from(new Set([selectedTeam.leaderId, ...(selectedTeam.memberIds || [])].filter(Boolean)));
+                    return memberIdsInner.map(uid => (
+                      <View
+                        key={uid}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#111827',
+                        }}
+                      >
+                        <Text style={{ color: uid === selectedTeam.leaderId ? '#22d3ee' : '#e5e7eb', fontWeight: uid === selectedTeam.leaderId ? '800' : '600' }}>
+                          {userMap[uid] || uid}{uid === selectedTeam.leaderId ? ' (Lider)' : ''}
+                        </Text>
+                        {uid !== selectedTeam.leaderId && (
+                          <Button mode="text" compact onPress={() => handleRemoveMember(selectedTeam, uid)}>
+                            Çıkar
+                          </Button>
+                        )}
+                      </View>
+                    ));
+                  })()}
+                </ScrollView>
+              </View>
+
+              <Text style={{ color: colors.textSecondary, marginBottom: 6 }}>Üye ekle</Text>
+              <View style={{ maxHeight: 200, borderRadius: 12, borderWidth: 1, borderColor: '#1f2937' }}>
+                <ScrollView>
+                  {users
+                    .filter(u => !((selectedTeam.memberIds || []).includes(u.id)) && u.id !== selectedTeam.leaderId)
+                    .map(u => (
+                      <Pressable
+                        key={u.id}
+                        onPress={() => handleAddMember(selectedTeam, u.id)}
+                        style={{ paddingVertical: 10, paddingHorizontal: 12 }}
+                      >
+                        <Text style={{ color: '#e5e7eb' }}>{u.name || u.email || u.uid}</Text>
+                      </Pressable>
+                    ))}
+                </ScrollView>
+              </View>
+            </View>
+          )}
+        </Modal>
+      </Portal>
     </ScrollView>
   );
 }

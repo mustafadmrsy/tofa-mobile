@@ -5,12 +5,24 @@ const DB = db || dbDefault; // güvenlik için fallback
 
 const TEAMS = "teams";
 
-export const createTeam = async (teamId, { name, leaderId, memberIds = [] }) => {
+const DEFAULT_COLORS = ["#3b82f6", "#22c55e", "#f97316", "#ec4899", "#a855f7", "#06b6d4", "#facc15"]; // mavi, yeşil vs.
+
+const pickTeamColor = (teamId) => {
+  if (!teamId) return DEFAULT_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < teamId.length; i++) {
+    hash = (hash * 31 + teamId.charCodeAt(i)) >>> 0;
+  }
+  return DEFAULT_COLORS[hash % DEFAULT_COLORS.length];
+};
+
+export const createTeam = async (teamId, { name, leaderId, memberIds = [], color }) => {
   const ref = doc(DB, TEAMS, teamId);
   await setDoc(ref, {
     name,
     leaderId,
     memberIds,
+    color: color || pickTeamColor(teamId),
     createdAt: serverTimestamp(),
   });
   return (await getDoc(ref)).data();
@@ -18,12 +30,24 @@ export const createTeam = async (teamId, { name, leaderId, memberIds = [] }) => 
 
 export const listAllTeams = async () => {
   const s = await getDocs(collection(DB, TEAMS));
-  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const results = [];
+  for (const d of s.docs) {
+    const data = d.data();
+    let color = data.color;
+    if (!color) {
+      color = pickTeamColor(d.id);
+      try {
+        await updateDoc(doc(DB, TEAMS, d.id), { color });
+      } catch {}
+    }
+    results.push({ id: d.id, ...data, color });
+  }
+  return results;
 };
 
-export const createTeamAutoId = async ({ name, leaderId = null, memberIds = [] }) => {
+export const createTeamAutoId = async ({ name, leaderId = null, memberIds = [], color }) => {
   const id = doc(collection(DB, TEAMS)).id;
-  await createTeam(id, { name, leaderId, memberIds });
+  await createTeam(id, { name, leaderId, memberIds, color });
   const snap = await getDoc(doc(DB, TEAMS, id));
   return { id, ...snap.data() };
 };

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, RefreshControl, TouchableOpacity, TextInput as RNTextInput } from "react-native";
+import { View, Text, FlatList, RefreshControl, TouchableOpacity, TextInput as RNTextInput, Pressable } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme/colors";
 import { listAllTasks, updateTask } from "../services/tasks";
 import { listAllTeams } from "../services/teams";
 import { listUsers } from "../services/users";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Portal, Modal, Button, RadioButton, Snackbar, TextInput } from "react-native-paper";
+import { ArrowLeft, Eye, Pencil } from "lucide-react-native";
 
 export default function SuperAdminTasks() {
   const [tasks, setTasks] = useState([]);
@@ -17,6 +19,8 @@ export default function SuperAdminTasks() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [activeTeam, setActiveTeam] = useState(null);
+  const [search, setSearch] = useState("");
   const insets = useSafeAreaInsets();
 
   const teamMap = useMemo(() => {
@@ -82,44 +86,197 @@ export default function SuperAdminTasks() {
     }
   };
 
-  const sortedTasks = useMemo(() => {
-    return [...tasks].sort((a,b) => {
-      const da = a.dueDate ? (a.dueDate.seconds ? a.dueDate.seconds*1000 : a.dueDate) : Infinity;
-      const db = b.dueDate ? (b.dueDate.seconds ? b.dueDate.seconds*1000 : b.dueDate) : Infinity;
-      return da - db;
+  const getDueMs = (item) => {
+    if (!item.dueDate) return Infinity;
+    return item.dueDate.seconds ? item.dueDate.seconds*1000 : item.dueDate;
+  };
+
+  const teamTasks = useMemo(() => {
+    if (!activeTeam) return [];
+    const memberIds = new Set([activeTeam.leaderId, ...(activeTeam.memberIds || [])].filter(Boolean));
+    return tasks.filter(t => {
+      const belongsToTeam = t.teamId === activeTeam.id;
+      const assigneeInTeam = t.assigneeId && memberIds.has(t.assigneeId);
+      return belongsToTeam || assigneeInTeam;
     });
-  }, [tasks]);
+  }, [tasks, activeTeam]);
+
+  const filteredTasks = useMemo(() => {
+    const base = activeTeam ? teamTasks : tasks;
+    const q = search.trim().toLowerCase();
+    const filtered = base.filter(t => {
+      if (!q) return true;
+      const title = (t.title || "").toLowerCase();
+      const desc = (t.description || "").toLowerCase();
+      const assignee = t.assigneeId ? (userMap[t.assigneeId] || "").toLowerCase() : "";
+      const teamName = t.teamId ? (teamMap[t.teamId] || "").toLowerCase() : "";
+      return title.includes(q) || desc.includes(q) || assignee.includes(q) || teamName.includes(q);
+    });
+    return filtered.sort((a,b) => getDueMs(a) - getDueMs(b));
+  }, [tasks, teamTasks, activeTeam, search, userMap, teamMap]);
 
   const isOverdue = (item) => {
     if (!item.dueDate) return false;
-    const dueMs = item.dueDate.seconds ? item.dueDate.seconds*1000 : item.dueDate;
+    const dueMs = getDueMs(item);
     return item.status !== 'done' && Date.now() > dueMs;
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity onPress={() => openEdit(item)} activeOpacity={0.92} style={{ padding: 14, borderRadius: 16, borderWidth: 1, borderColor: isOverdue(item) ? '#ef4444' : '#1f2233', backgroundColor: '#0b0d16', marginBottom: 12, shadowColor: '#8b5cf6', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } }}>
-      <Text style={{ color: '#22d3ee', fontWeight: '800', fontSize: 16 }}>{item.title}</Text>
-      {!!item.description && <Text style={{ color: colors.textSecondary, marginTop: 4 }}>{item.description}</Text>}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
-        <Text style={{ color: colors.textSecondary }}>Team: <Text style={{ color: colors.textPrimary }}>{item.teamId ? (teamMap[item.teamId] || item.teamId) : '-'}</Text></Text>
-        <Text style={{ color: colors.textSecondary }}>Assignee: <Text style={{ color: colors.textPrimary }}>{item.assigneeId ? (userMap[item.assigneeId] || item.assigneeId) : '-'}</Text></Text>
-        <Text style={{ color: colors.textSecondary }}>Status: <Text style={{ color: colors.textPrimary }}>{item.status}</Text></Text>
-        <Text style={{ color: colors.textSecondary }}>Due: <Text style={{ color: isOverdue(item) ? '#ef4444' : colors.textPrimary }}>{item.dueDate ? new Date(item.dueDate.seconds ? item.dueDate.seconds*1000 : item.dueDate).toLocaleDateString() : '-'}</Text></Text>
-      </View>
-      {isOverdue(item) && <Text style={{ color: '#ef4444', marginTop: 6 }}>Overdue</Text>}
-    </TouchableOpacity>
-  );
+  const renderTaskItem = ({ item }) => {
+    const assigneeLabel = item.assigneeId ? (userMap[item.assigneeId] || item.assigneeId) : "Atanmamış";
+    const teamLabel = item.teamId ? (teamMap[item.teamId] || item.teamId) : "Takım yok";
+    const overdue = isOverdue(item);
+    const dueText = item.dueDate
+      ? new Date(getDueMs(item)).toLocaleDateString()
+      : "-";
+
+    const statusLabel = item.status || "todo";
+    const statusColor = statusLabel === "done" ? "#22c55e" : statusLabel === "in_progress" ? "#3b82f6" : "#f97316";
+
+    return (
+      <TouchableOpacity
+        onPress={() => openEdit(item)}
+        activeOpacity={0.93}
+        style={{ marginBottom: 12 }}
+      >
+        <LinearGradient
+          colors={["#020617", "#111827"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            borderRadius: 18,
+            padding: 14,
+            borderWidth: 1,
+            borderColor: overdue ? "#ef4444" : "#1f2937",
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={{ color: '#f9fafb', fontWeight: '800', fontSize: 15 }} numberOfLines={2}>{item.title}</Text>
+              {!!item.description && (
+                <Text style={{ color: colors.textSecondary, marginTop: 4 }} numberOfLines={2}>{item.description}</Text>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: '#1f2937', alignItems: 'center', justifyContent: 'center' }}>
+                <Eye color="#e5e7eb" size={16} />
+              </View>
+              <View style={{ width: 32, height: 32, borderRadius: 999, backgroundColor: '#1f2937', alignItems: 'center', justifyContent: 'center' }}>
+                <Pencil color="#e5e7eb" size={16} />
+              </View>
+            </View>
+          </View>
+
+          <View style={{ marginTop: 8 }}>
+            <Text style={{ color: '#e5e7eb', fontSize: 12 }}>
+              {assigneeLabel} • {teamLabel}
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: statusColor + '33', borderWidth: 1, borderColor: statusColor + '55' }}>
+                <Text style={{ color: statusColor, fontSize: 11, fontWeight: '600' }}>{statusLabel}</Text>
+              </View>
+              {overdue && (
+                <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: '#b91c1c33', borderWidth: 1, borderColor: '#ef444455' }}>
+                  <Text style={{ color: '#f97373', fontSize: 11, fontWeight: '600' }}>Overdue</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ color: '#9ca3af', fontSize: 11 }}>Due: <Text style={{ color: overdue ? '#f97373' : '#e5e7eb' }}>{dueText}</Text></Text>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background, padding: 16, paddingTop: 16 + Math.max(insets.top, 8) }}>
-      <Text style={{ color: '#8b5cf6', fontSize: 22, fontWeight: '900', marginBottom: 12 }}>Tüm Görevler</Text>
-      <FlatList
-        data={sortedTasks}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
-        ListEmptyComponent={!loading ? <Text style={{ color: colors.textSecondary }}>Görev bulunamadı</Text> : null}
+      <LinearGradient
+        colors={["#111827", "#1f2937"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#4b5563' }}
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {activeTeam && (
+              <Pressable onPress={() => setActiveTeam(null)} style={{ width: 28, height: 28, borderRadius: 999, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center', marginRight: 4 }}>
+                <ArrowLeft color="#e5e7eb" size={16} />
+              </Pressable>
+            )}
+            <Text style={{ color: '#f9fafb', fontSize: 18, fontWeight: '800' }}>
+              {activeTeam ? `${activeTeam.name} Tasks` : 'All Tasks'}
+            </Text>
+          </View>
+        </View>
+      </LinearGradient>
+
+      <TextInput
+        mode="outlined"
+        placeholder={activeTeam ? 'Görev ara...' : 'Takım / görev ara...'}
+        value={search}
+        onChangeText={setSearch}
+        style={{ marginBottom: 10 }}
+        outlineColor={'#1f2937'}
+        activeOutlineColor={'#6366f1'}
+        textColor={'#e5e7eb'}
+        placeholderTextColor={'#6b7280'}
       />
+
+      {!activeTeam ? (
+        <FlatList
+          data={teams}
+          keyExtractor={(t) => t.id}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
+          ListEmptyComponent={!loading ? <Text style={{ color: colors.textSecondary }}>Takım bulunamadı</Text> : null}
+          renderItem={({ item }) => {
+            const memberIds = Array.from(new Set([item.leaderId, ...(item.memberIds || [])].filter(Boolean)));
+            const memberTasks = tasks.filter(t => {
+              const belongsToTeam = t.teamId === item.id;
+              const assigneeInTeam = t.assigneeId && memberIds.includes(t.assigneeId);
+              return belongsToTeam || assigneeInTeam;
+            });
+
+            return (
+              <Pressable
+                onPress={() => setActiveTeam(item)}
+                style={{ marginBottom: 10 }}
+              >
+                <LinearGradient
+                  colors={["#1f1247", "#2d0f5f"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{ borderRadius: 18, padding: 14, borderWidth: 1, borderColor: '#4c1d95' }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ color: '#f9fafb', fontSize: 15, fontWeight: '800' }}>{item.name}</Text>
+                    <Text style={{ color: '#9ca3af', fontSize: 12 }}>{memberTasks.length} görev</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', marginTop: 8, gap: 8 }}>
+                    <View style={{ flex: 1, backgroundColor: '#251457', borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10 }}>
+                      <Text style={{ color: '#e5e7eb', fontSize: 11 }}>Members</Text>
+                      <Text style={{ color: '#f9fafb', fontSize: 16, fontWeight: '800' }}>{memberIds.length}</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: '#251457', borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10 }}>
+                      <Text style={{ color: '#e5e7eb', fontSize: 11 }}>Tasks</Text>
+                      <Text style={{ color: '#f9fafb', fontSize: 16, fontWeight: '800' }}>{memberTasks.length}</Text>
+                    </View>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            );
+          }}
+        />
+      ) : (
+        <FlatList
+          data={filteredTasks}
+          keyExtractor={(item) => item.id}
+          renderItem={renderTaskItem}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
+          ListEmptyComponent={!loading ? <Text style={{ color: colors.textSecondary }}>Görev bulunamadı</Text> : null}
+        />
+      )}
       <Portal>
         <Modal visible={!!selected} onDismiss={() => setSelected(null)} contentContainerStyle={{ margin: 16, borderRadius: 16, backgroundColor: '#0b0d16', padding: 16, borderWidth: 1, borderColor: '#8b5cf6' }}>
           {selected && (

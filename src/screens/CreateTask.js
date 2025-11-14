@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Pressable } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme/colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TextInput, SegmentedButtons, Snackbar, Portal, Modal, Button } from "react-native-paper";
@@ -28,6 +29,8 @@ export default function CreateTask() {
   const [y, setY] = useState("");
   const [m, setM] = useState("");
   const [d, setD] = useState("");
+  const [teamDropdownOpen, setTeamDropdownOpen] = useState(false);
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
 
   const outlineColor = '#2a2e3f';
   const activeOutlineColor = '#8b5cf6';
@@ -93,87 +96,238 @@ export default function CreateTask() {
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ padding: 16, paddingTop: insets.top + 8, paddingBottom: 40 }}>
+      {/* Header */}
+      <LinearGradient
+        colors={["#1f1247", "#241b5a"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ borderRadius: 18, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 16, borderWidth: 1, borderColor: '#312e81' }}
+      >
+        <Text style={{ color: '#e5e7eb', fontSize: 18, fontWeight: '800', textAlign: 'center' }}>Görev Oluştur</Text>
+      </LinearGradient>
+
+      {/* Team select (dropdown) */}
+      <View style={{ marginBottom: 14 }}>
+        <Text style={{ color: '#9aa0a6', marginBottom: 6 }}>Takım</Text>
+        <View style={{ borderRadius: 14, borderWidth: 1, borderColor: '#1f2233', backgroundColor: '#020617' }}>
+          <Pressable
+            onPress={() => setTeamDropdownOpen((o) => !o)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12 }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {selectedTeam?.color && (
+                <View style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: selectedTeam.color }} />
+              )}
+              <Text style={{ color: '#e5e7eb', fontWeight: '600' }}>
+                {selectedTeam ? selectedTeam.name : (!teams || teams.length === 0) ? 'Takım yok' : 'Takım seç'}
+              </Text>
+            </View>
+            <Text style={{ color: '#9ca3af', fontSize: 12 }}>{teamDropdownOpen ? '▲' : '▼'}</Text>
+          </Pressable>
+
+          {teamDropdownOpen && (!teams || teams.length === 0) && !loading && (
+            <Text style={{ color: colors.textSecondary, padding: 12, borderTopWidth: 1, borderTopColor: '#111827' }}>Takım bulunamadı</Text>
+          )}
+
+          {teamDropdownOpen && !!teams && teams.length > 0 && (
+            <View style={{ borderTopWidth: 1, borderTopColor: '#111827' }}>
+              {teams.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => {
+                    setTeamId(item.id);
+                    setAssigneeId(null);
+                    setTeamDropdownOpen(false);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    backgroundColor: teamId === item.id ? '#111426' : 'transparent',
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#111827',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {item.color && (
+                      <View style={{ width: 10, height: 10, borderRadius: 999, backgroundColor: item.color }} />
+                    )}
+                    <Text style={{ color: '#e5e7eb', fontWeight: '600' }}>{item.name}</Text>
+                  </View>
+                  {teamId === item.id && (
+                    <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '700' }}>Seçili</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Task title */}
+      <View style={{ marginBottom: 14 }}>
+        <Text style={{ color: '#9aa0a6', marginBottom: 6 }}>Görev Başlığı</Text>
+        <TextInput
+          mode="outlined"
+          placeholder="Örn. Sunum hazırlığı"
+          value={title}
+          onChangeText={setTitle}
+          style={[inputStyle]}
+          outlineColor={outlineColor}
+          activeOutlineColor={activeOutlineColor}
+          textColor={'#e6e6e6'}
+          placeholderTextColor={'#6b7280'}
+        />
+      </View>
+
+      {/* Description */}
+      <View style={{ marginBottom: 14 }}>
+        <Text style={{ color: '#9aa0a6', marginBottom: 6 }}>Açıklama</Text>
+        <TextInput
+          mode="outlined"
+          placeholder="Görev detaylarını yazın"
+          value={desc}
+          onChangeText={setDesc}
+          multiline
+          numberOfLines={4}
+          style={[inputStyle, { minHeight: 100 }]}
+          outlineColor={outlineColor}
+          activeOutlineColor={activeOutlineColor}
+          textColor={'#e6e6e6'}
+          placeholderTextColor={'#6b7280'}
+        />
+      </View>
+
+      {/* Due date */}
       <View style={{ marginBottom: 16 }}>
-        <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800' }}>Görev Oluştur</Text>
-        <Text style={{ color: '#9aa0a6', marginTop: 4 }}>Başlık, açıklama ve atama bilgilerini gir</Text>
+        <Text style={{ color: '#9aa0a6', marginBottom: 6 }}>Son Tarih</Text>
+        <TouchableOpacity
+          onPress={() => {
+            setDateOpen(true);
+            const dt = due ? new Date(due) : new Date();
+            setY(String(dt.getFullYear()));
+            setM(String(dt.getMonth() + 1).padStart(2, '0'));
+            setD(String(dt.getDate()).padStart(2, '0'));
+          }}
+          style={{
+            paddingVertical: 14,
+            paddingHorizontal: 12,
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: outlineColor,
+            backgroundColor: '#020617',
+          }}
+        >
+          <Text style={{ color: due ? '#e6e6e6' : '#6b7280' }}>{due || 'Tarih seç (YYYY-MM-DD)'}</Text>
+        </TouchableOpacity>
       </View>
 
-      <Text style={{ color: '#9aa0a6' }}>Başlık</Text>
-      <TextInput
-        mode="outlined"
-        placeholder="Örn. Sunum hazırlığı"
-        value={title}
-        onChangeText={setTitle}
-        style={[inputStyle, { marginTop: 6, marginBottom: 12 }]}
-        outlineColor={outlineColor}
-        activeOutlineColor={activeOutlineColor}
-        textColor={'#e6e6e6'}
-        placeholderTextColor={'#6b7280'}
-      />
-
-      <Text style={{ color: '#9aa0a6' }}>Açıklama</Text>
-      <TextInput
-        mode="outlined"
-        placeholder="Görev detaylarını yazın"
-        value={desc}
-        onChangeText={setDesc}
-        multiline
-        numberOfLines={4}
-        style={[inputStyle, { marginTop: 6, marginBottom: 12 }]}
-        outlineColor={outlineColor}
-        activeOutlineColor={activeOutlineColor}
-        textColor={'#e6e6e6'}
-        placeholderTextColor={'#6b7280'}
-      />
-
-      <Text style={{ color: '#9aa0a6', marginTop: 6 }}>Takım Seç</Text>
-      <View style={{ maxHeight: 140, borderWidth: 1, borderColor: '#1f2233', borderRadius: 12, marginTop: 6, marginBottom: 12 }}>
-        {(!teams || teams.length === 0) && !loading ? (
-          <Text style={{ color: colors.textSecondary, padding: 12 }}>Takım bulunamadı</Text>
-        ) : (
-          <View>
-            {teams.map((item) => (
-              <TouchableOpacity key={item.id} onPress={()=>{ setTeamId(item.id); setAssigneeId(null); }} style={{ padding: 12, backgroundColor: teamId===item.id ? '#111426' : 'transparent' }}>
-                <Text style={{ color: colors.textPrimary }}>{item.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+      {/* Priority */}
+      <View style={{ marginBottom: 18 }}>
+        <Text style={{ color: '#9aa0a6', marginBottom: 8 }}>Öncelik</Text>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          {[
+            { value: 'low', label: 'Düşük', bg: '#064e3b' },
+            { value: 'medium', label: 'Orta', bg: '#78350f' },
+            { value: 'high', label: 'Yüksek', bg: '#7f1d1d' },
+          ].map(opt => {
+            const active = priority === opt.value;
+            return (
+              <Pressable
+                key={opt.value}
+                onPress={() => setPriority(opt.value)}
+                style={{
+                  flex: 1,
+                  borderRadius: 16,
+                  paddingVertical: 10,
+                  paddingHorizontal: 8,
+                  backgroundColor: active ? opt.bg : '#020617',
+                  borderWidth: 1,
+                  borderColor: active ? '#fbbf24' : '#1f2937',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: '#f9fafb', fontWeight: '700' }}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
-      <Text style={{ color: '#9aa0a6' }}>Atanacak Kişi</Text>
-      <View style={{ maxHeight: 160, borderWidth: 1, borderColor: '#1f2233', borderRadius: 12, marginTop: 6, marginBottom: 12 }}>
-        {(!filteredUsers || filteredUsers.length === 0) && !loading ? (
-          <Text style={{ color: colors.textSecondary, padding: 12 }}>Kullanıcı bulunamadı</Text>
-        ) : (
-          <View>
-            {filteredUsers.map((item) => (
-              <TouchableOpacity key={item.id} onPress={()=>setAssigneeId(item.id)} style={{ padding: 12, backgroundColor: assigneeId===item.id ? '#111426' : 'transparent' }}>
-                <Text style={{ color: colors.textPrimary }}>{item.name || item.email || item.uid}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+      {/* Assignee list (dropdown) */}
+      <View style={{ marginBottom: 20 }}>
+        <Text style={{ color: '#9aa0a6', marginBottom: 6 }}>Atanacak Kişi</Text>
+        <View style={{ borderWidth: 1, borderColor: '#1f2233', borderRadius: 14, backgroundColor: '#020617' }}>
+          <Pressable
+            onPress={() => setAssigneeDropdownOpen(o => !o)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 12 }}
+          >
+            <Text style={{ color: '#e5e7eb', fontWeight: '600' }}>
+              {assigneeId ? (filteredUsers.find(u => u.id === assigneeId)?.name || filteredUsers.find(u => u.id === assigneeId)?.email || 'Seçili kullanıcı') : 'Kişi seç'}
+            </Text>
+            <Text style={{ color: '#9ca3af', fontSize: 12 }}>{assigneeDropdownOpen ? '▲' : '▼'}</Text>
+          </Pressable>
+
+          {assigneeDropdownOpen && (!filteredUsers || filteredUsers.length === 0) && !loading && (
+            <Text style={{ color: colors.textSecondary, padding: 12, borderTopWidth: 1, borderTopColor: '#111827' }}>Kullanıcı bulunamadı</Text>
+          )}
+
+          {assigneeDropdownOpen && !!filteredUsers && filteredUsers.length > 0 && (
+            <View style={{ maxHeight: 220, borderTopWidth: 1, borderTopColor: '#111827' }}>
+              <ScrollView>
+                {filteredUsers.map((item) => {
+                  const display = item.name || item.email || item.uid;
+                  const initials = (display || '').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
+                  const selected = assigneeId === item.id;
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => { setAssigneeId(item.id); setAssigneeDropdownOpen(false); }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        backgroundColor: selected ? '#111426' : 'transparent',
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#111827',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#6366f1' }}>
+                          <Text style={{ color: '#e5e7eb', fontWeight: '800', fontSize: 14 }}>{initials || 'U'}</Text>
+                        </View>
+                        <View style={{ marginLeft: 10 }}>
+                          <Text style={{ color: '#e5e7eb', fontWeight: '600' }}>{display}</Text>
+                          {!!item.email && <Text style={{ color: '#9ca3af', fontSize: 11 }}>{item.email}</Text>}
+                        </View>
+                      </View>
+                      {selected && (
+                        <Text style={{ color: '#22c55e', fontSize: 12, fontWeight: '700' }}>Seçili</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+        </View>
       </View>
 
-      <Text style={{ color: '#9aa0a6' }}>Son Tarih</Text>
-      <TouchableOpacity onPress={()=>{ setDateOpen(true); const dt = due ? new Date(due) : new Date(); setY(String(dt.getFullYear())); setM(String(dt.getMonth()+1).padStart(2,'0')); setD(String(dt.getDate()).padStart(2,'0')); }} style={{ marginTop: 6, marginBottom: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: outlineColor, backgroundColor: 'transparent' }}>
-        <Text style={{ color: due ? '#e6e6e6' : '#6b7280' }}>{due || 'Tarih seç'}</Text>
-      </TouchableOpacity>
-
-      <Text style={{ color: '#9aa0a6', marginBottom: 6 }}>Öncelik</Text>
-      <SegmentedButtons
-        value={priority}
-        onValueChange={setPriority}
-        buttons={[
-          { value: 'low', label: 'Düşük' },
-          { value: 'medium', label: 'Orta' },
-          { value: 'high', label: 'Yüksek' },
-        ]}
-        style={{ marginBottom: 16 }}
-      />
-
-      <NeonButton title="Görevi Oluştur" onPress={handleSubmit} loading={submitting} disabled={submitting} />
+      {/* Bottom actions */}
+      <View style={{ marginTop: 8 }}>
+        <NeonButton title="Görevi Oluştur" onPress={handleSubmit} loading={submitting} disabled={submitting} style={{ marginBottom: 10 }} />
+        <Pressable
+          onPress={() => { setTitle(""); setDesc(""); setAssigneeId(null); setDue(""); setPriority('medium'); }}
+          style={{ paddingVertical: 12, borderRadius: 999, borderWidth: 1, borderColor: '#b91c1c', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ color: '#fca5a5', fontWeight: '700' }}>İptal</Text>
+        </Pressable>
+      </View>
 
       <Snackbar visible={!!error} onDismiss={()=>setError("")} duration={4000} style={{ backgroundColor: '#ef4444', marginTop: 12 }}>{error}</Snackbar>
       <Snackbar visible={!!success} onDismiss={()=>setSuccess("")} duration={3000} style={{ backgroundColor: '#22c55e', marginTop: 12 }}>{success}</Snackbar>
