@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'super_admin';
+    }
+    
+    function isTeamManager() {
+      return isAuthenticated() && getUserData().role == 'team_manager';
+    }
+    
+    function isManagerOrAdmin() {
+      return isTeamManager() || isSuperAdmin();
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Anyone authenticated can read user documents
+      allow read: if isAuthenticated();
+      
+      // Users can update themselves, team managers can update their team members (or add new ones to their team), admins can update anyone
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() ||
+        (isTeamManager() && (
+          // Allow if user is already in manager's team
+          resource.data.teamId == getUserData().teamId ||
+          // Allow if manager is adding user to their own team
+          request.resource.data.teamId == getUserData().teamId
+        ))
+      );
+      
+      // Only during signup (handled by auth service)
+      allow create: if isAuthenticated();
+      
+      // Only super admins can delete
+      allow delete: if isSuperAdmin();
+    }
+    
+    // Teams collection
+    match /teams/{teamId} {
+      // All authenticated users can read teams
+      allow read: if isAuthenticated();
+      
+      // Only super admins can create teams
+      allow create: if isSuperAdmin();
+      
+      // Team managers can update their own team, super admins can update any team
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() || 
+        (isTeamManager() && getUserData().teamId == teamId)
+      );
+      
+      // Only super admins can delete teams
+      allow delete: if isSuperAdmin();
+    }
+    
+    // Tasks collection
+    match /tasks/{taskId} {
+      // Users can read tasks they're assigned to or created, managers can read their team's tasks, admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.assignedTo == request.auth.uid ||
+        resource.data.assignedBy == request.auth.uid ||
+        (isTeamManager() && resource.data.teamId == getUserData().teamId) ||
+        isSuperAdmin()
+      );
+      
+      // Team managers and super admins can create tasks for their team
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() ||
+        (isTeamManager() && request.resource.data.teamId == getUserData().teamId)
+      );
+      
+      // Task assignees can update status, managers and admins can update everything
+      allow update: if isAuthenticated() && (
+        resource.data.assignedTo == request.auth.uid ||
+        resource.data.assignedBy == request.auth.uid ||
+        (isTeamManager() && resource.data.teamId == getUserData().teamId) ||
+        isSuperAdmin()
+      );
+      
+      // Only managers of the team and admins can delete tasks
+      allow delete: if isAuthenticated() && (
+        (isTeamManager() && resource.data.teamId == getUserData().teamId) ||
+        isSuperAdmin()
+      );
+    }
+  }
+}

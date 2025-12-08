@@ -1,166 +1,50 @@
-# TOFA Mobile
+# Welcome to your Expo app 👋
 
-Role tabanlı görev yönetimi (superadmin, admin/leader, worker) için Firebase (Auth + Firestore + Storage) entegre edilmiş, Expo/React Native ile geliştirilmiş mobil uygulama.
+This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-## Özellikler
-- Roller: superadmin, admin/leader, worker
-- E-posta doğrulama zorunluluğu ve Firestore `users.verified` senkronizasyonu
-- Lider/Süper Admin panelleri ve neon temalı modern UI
-- Ekip yönetimi: liderin ekibine üye ekleme/çıkarma
-- Görev yönetimi: oluşturma, atama, durum güncelleme
-- “Tarihi Geçmiş” ve “Yaklaşan” görev bölümleri, ayarlanabilir uyarı eşiği
-- Worker: sadece kendisine atanmış görevler
+## Get started
 
-## Kurulum
-1. Bağımlılıklar
+1. Install dependencies
+
    ```bash
    npm install
    ```
-2. Firebase yapılandırması
-   - Aşağıdaki dosyayı kendi Firebase projenize göre doldurun:
-     - `src/api/firebaseConfig.js`
-   - Örnek içerik:
-     ```js
-     import { initializeApp } from "firebase/app";
-     import { getAuth } from "firebase/auth";
-     import { getFirestore } from "firebase/firestore";
-     import { getStorage } from "firebase/storage";
 
-     const firebaseConfig = {
-       apiKey: "...",
-       authDomain: "...",
-       projectId: "...",
-       storageBucket: "...",
-       messagingSenderId: "...",
-       appId: "...",
-     };
+2. Start the app
 
-     export const app = initializeApp(firebaseConfig);
-     export const auth = getAuth(app);
-     export const db = getFirestore(app);
-     export const storage = getStorage(app);
-     export const isFirebaseConfigured = !!firebaseConfig?.projectId;
-     ```
-   - Süper admin e-postasını `src/constants/bootstrap.js` içerisine ekleyin:
-     ```js
-     export const SUPERADMIN_EMAIL = "superadmin@domain.com";
-     ```
-
-3. Geliştirme sunucusu
    ```bash
-   npx expo start --tunnel
+   npx expo start
    ```
-   - iOS/Android simülatör ya da gerçek cihazda Expo Go ile taratıp çalıştırın.
 
-## Navigasyon
-- `src/navigation/AppNavigator.js`: Rol bazlı yönlendirme
-- Admin/Lider: `AdminTabs` (AdminDashboard + CreateTask + TeamManagement + Profile)
-- Worker: `WorkerStack`/`WorkerTabs`
-- Super Admin: `SuperAdminTabs`
-- `TaskDetail` hem `task` nesnesi hem de `taskId` ile açılabilir.
+In the output, you'll find options to open the app in a
 
-## Önemli Ekranlar
-- `src/screens/Dashboard/AdminDashboard.js` (Lider Dashboard)
-  - Neon banner ve istatistik kartları
-  - Son Görevler listesi (detaya navigasyon)
-  - Tarihi Geçmiş/Yaklaşan bölümleri, uyarı eşiği
-- `src/screens/TeamManagement.js`
-  - Ekip üyeleri listesi, üye ekleme modalı (Ekiptekiler/Ekipte olmayanlar sekmeleri)
-  - Üye detayı ve atandığı son görevler
-- `src/screens/Dashboard/WorkerDashboard.js`
-  - Firestore’dan sadece çalışanın görevleri
-  - Tarihi Geçmiş/Yaklaşan bölümleri
-- `src/screens/CreateTask.js`
-  - Takım ve atanan kişi seçimi, dueDate seçici
+- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-## Firestore Kuralları
-Aşağıdaki kurallar repo ile uyumludur. Liderler lideri oldukları takıma görev oluşturabilir ve sadece o takım üyesine/liderine atayabilir. Worker kendi görevlerini verified olmasa dahi okuyabilir. Users okuma liderlere açık (Üye Ekle için).
+You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
-```rules
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
+## Get a fresh project
 
-    function isSignedIn() { return request.auth != null; }
-    function userDoc(uid) { return get(/databases/$(database)/documents/users/$(uid)); }
-    function userData() { return userDoc(request.auth.uid).data; }
-    function isVerified() { return isSignedIn() && (userData().verified == 1); }
-    function userRole() { return isSignedIn() ? (userData().role != null ? userData().role : "worker") : "worker"; }
-    function isSuperAdmin() { return userRole() == "superadmin"; }
-    function isAdmin() { return isSuperAdmin() || userRole() == "admin"; }
-    function isLeader() { return userRole() == "leader"; }
-    function isWorker() { return userRole() == "worker"; }
-    function userTeamId() { return isSignedIn() ? userData().teamId : null; }
+When you're ready, run:
 
-    function isLeaderOf(teamId) {
-      return isLeader() && get(/databases/$(database)/documents/teams/$(teamId)).data.leaderId == request.auth.uid;
-    }
-
-    function isMemberOf(teamId, uid) {
-      let t = get(/databases/$(database)/documents/teams/$(teamId)).data;
-      return (t.leaderId == uid) || (t.memberIds != null && t.memberIds.hasAny([uid]));
-    }
-
-    match /users/{uid} {
-      allow read: if isSignedIn() && (uid == request.auth.uid || isAdmin() || isLeader());
-      allow create: if isSignedIn() && uid == request.auth.uid;
-      allow update: if isSignedIn() && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['name','teamId','verified','verifiedAt'])
-        && (
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['name','teamId'])
-          || (
-            request.resource.data.diff(resource.data).changedKeys().hasOnly(['verified','verifiedAt'])
-            && request.resource.data.verified == 1
-            && request.auth.token.email_verified == true
-          )
-        );
-      allow delete: if isAdmin();
-      allow write: if isAdmin();
-    }
-
-    match /teams/{teamId} {
-      allow read: if isVerified() && (
-        isAdmin() ||
-        (isLeader() && resource.data.leaderId == request.auth.uid) ||
-        ((userTeamId() == teamId) && (resource.data.memberIds != null && resource.data.memberIds.hasAny([request.auth.uid])))
-      );
-      allow create: if isVerified() && isAdmin();
-      allow update: if isVerified() && (
-        isAdmin() ||
-        (isLeader() && resource.data.leaderId == request.auth.uid &&
-          request.resource.data.keys().hasOnly(['name','leaderId','memberIds','createdAt']) &&
-          request.resource.data.leaderId == resource.data.leaderId)
-      );
-      allow delete: if isVerified() && isAdmin();
-    }
-
-    match /tasks/{taskId} {
-      allow read: if (
-        (isSignedIn() && isWorker() && resource.data.assigneeId == request.auth.uid)
-        || (isVerified() && (isAdmin() || (isLeader() && (resource.data.teamId == userTeamId() || isLeaderOf(resource.data.teamId)))))
-      );
-      allow create: if isVerified() && (
-        isAdmin() || (isLeaderOf(request.resource.data.teamId) && isMemberOf(request.resource.data.teamId, request.resource.data.assigneeId))
-      );
-      allow update: if isVerified() && (
-        isAdmin() ||
-        (isLeader() && (resource.data.teamId == userTeamId() || isLeaderOf(resource.data.teamId))) ||
-        (isWorker() && resource.data.assigneeId == request.auth.uid && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status']))
-      );
-      allow delete: if isVerified() && (isAdmin() || (isLeader() && (resource.data.teamId == userTeamId() || isLeaderOf(resource.data.teamId))));
-    }
-  }
-}
+```bash
+npm run reset-project
 ```
 
-## Çalıştırma
-- İlk defa: `npm install`
-- Geliştirme: `npx expo start --tunnel`
-- Android/iOS cihaz: Expo Go ile QR kodu okutun
+This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
-## Katkı
-- PR açmadan önce lütfen konuyu kısaca bir issue ile not düşün.
-- Kod stili: Prettier/Eslint (varsayılan Expo ayarları) + fonksiyonel, küçük bileşenler tercih edilir.
+## Learn more
 
-## Lisans
-MIT
+To learn more about developing your project with Expo, look at the following resources:
+
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+
+## Join the community
+
+Join our community of developers creating universal apps.
+
+- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
+- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
