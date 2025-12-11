@@ -14,6 +14,7 @@ import {
     Animated,
     FlatList,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     Text,
     View,
@@ -149,11 +150,15 @@ export default function TasksScreen() {
                     </View>
 
                     {/* Filter Chips */}
-                    <View style={styles.filterContainer}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.filterContainer}
+                    >
                         {renderFilterChip('all', 'Tümü', tasks.length)}
                         {renderFilterChip('active', 'Aktif', activeCount)}
                         {renderFilterChip('completed', 'Tamamlanan', completedCount)}
-                    </View>
+                    </ScrollView>
                 </View>
             </LinearGradient>
 
@@ -260,7 +265,7 @@ const styles = StyleSheet.create({
     },
     filterContainer: {
         flexDirection: 'row',
-        gap: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
     },
     filterChip: {
         flexDirection: 'row',
@@ -270,6 +275,7 @@ const styles = StyleSheet.create({
         borderRadius: BorderRadius.full,
         borderWidth: 1,
         gap: Spacing.xs,
+        marginRight: Spacing.sm,
     },
     filterChipText: {
         fontSize: Typography.fontSize.sm,

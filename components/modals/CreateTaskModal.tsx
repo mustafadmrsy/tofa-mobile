@@ -1,4 +1,5 @@
 import { showToast } from '@/components/ToastProvider';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -13,7 +14,6 @@ import {
 } from '@/services/notificationService';
 import { TaskStatus, User } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
@@ -136,9 +136,14 @@ export function CreateTaskModal({
     };
 
     const onDateChange = (event: any, selectedDate?: Date) => {
-        setShowDatePicker(Platform.OS === 'ios');
+        if (Platform.OS !== 'web') {
+            setShowDatePicker(Platform.OS === 'ios');
+        }
         if (selectedDate) {
             setDueDate(selectedDate);
+            if (Platform.OS === 'web') {
+                setShowDatePicker(false);
+            }
         }
     };
 
@@ -175,7 +180,10 @@ export function CreateTaskModal({
                         </View>
                     </LinearGradient>
 
-                    <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                    <ScrollView
+                        style={styles.modalBody}
+                        showsVerticalScrollIndicator={false}
+                    >
                         {/* Title Input */}
                         <View style={styles.inputContainer}>
                             <View style={styles.inputLabel}>
@@ -262,29 +270,37 @@ export function CreateTaskModal({
                                 <Ionicons name="calendar-outline" size={20} color={colors.primary} />
                                 <Text style={[styles.label, { color: colors.text }]}>Bitiş Tarihi</Text>
                             </View>
-                            <TouchableOpacity
-                                style={[
-                                    styles.pickerButton,
-                                    { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
-                                ]}
-                                onPress={() => setShowDatePicker(true)}
-                            >
-                                <View style={styles.datePickerContent}>
-                                    <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-                                    <Text style={[styles.pickerButtonText, { color: colors.text }]}>
-                                        {dueDate.toLocaleDateString('tr-TR')}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            {showDatePicker && (
-                                <DateTimePicker
+                            {Platform.OS === 'web' ? (
+                                <DatePicker
                                     value={dueDate}
-                                    mode="date"
-                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                                     onChange={onDateChange}
                                     minimumDate={new Date()}
                                 />
+                            ) : (
+                                <>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.pickerButton,
+                                            { backgroundColor: colors.backgroundSecondary, borderColor: colors.border },
+                                        ]}
+                                        onPress={() => setShowDatePicker(true)}
+                                    >
+                                        <View style={styles.datePickerContent}>
+                                            <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+                                            <Text style={[styles.pickerButtonText, { color: colors.text }]}>
+                                                {dueDate.toLocaleDateString('tr-TR')}
+                                            </Text>
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {showDatePicker && (
+                                        <DatePicker
+                                            value={dueDate}
+                                            onChange={onDateChange}
+                                            minimumDate={new Date()}
+                                        />
+                                    )}
+                                </>
                             )}
                         </View>
                     </ScrollView>

@@ -28,7 +28,16 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png",
+      "name": "Görev Takip Uygulaması",
+      "shortName": "Görevler",
+      "lang": "tr",
+      "scope": "/",
+      "themeColor": "#0066CC",
+      "backgroundColor": "#FFFFFF",
+      "display": "standalone",
+      "orientation": "portrait"
     },
     "notification": {
       "icon": "./assets/images/notification-icon.png",

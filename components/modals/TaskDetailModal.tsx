@@ -2,6 +2,7 @@ import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 import { showToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +10,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { deleteTask, getUserById, updateTask, updateTaskStatus } from '@/services/firestoreService';
 import { Task, TaskStatus, UserRole } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useEffect, useState } from 'react';
 import {
     Modal,
@@ -71,8 +71,8 @@ export function TaskDetailModal({
         try {
             await updateTaskStatus(task.id, newStatus);
             onUpdated();
-            onClose(); // Modal'� kapat
-            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
             onClose(); // Modal'ı otomatik kapat
         } catch (error: any) {
             showToast.error('Hata', error.message || 'Durum güncellenemedi');
@@ -99,8 +99,8 @@ export function TaskDetailModal({
             showToast.success('Başarılı', 'Görev güncellendi');
             setEditing(false);
             onUpdated();
-            onClose(); // Modal'� kapat
-            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
         } catch (error: any) {
             showToast.error('Hata', error.message || 'Görev güncellenemedi');
         } finally {
@@ -122,8 +122,8 @@ export function TaskDetailModal({
             await deleteTask(task.id);
             showToast.success('Başarılı', 'Görev silindi');
             onUpdated();
-            onClose(); // Modal'� kapat
-            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
             onClose();
         } catch (error: any) {
             showToast.error('Hata', error.message || 'Görev silinemedi');
@@ -216,7 +216,9 @@ export function TaskDetailModal({
                         </View>
                     </View>
 
-                    <ScrollView style={styles.modalBody}>
+                    <ScrollView
+                        style={styles.modalBody}
+                    >
                         {/* Task Info */}
                         <Card>
                             {editing ? (
@@ -255,24 +257,34 @@ export function TaskDetailModal({
                                                 <Ionicons name="calendar-outline" size={20} color={colors.primary} />
                                                 <Text style={[styles.label, { color: colors.text }]}>Bitiş Tarihi</Text>
                                             </View>
-                                            <TouchableOpacity
-                                                style={[styles.datePickerButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
-                                                onPress={() => setShowDatePicker(true)}
-                                            >
-                                                <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-                                                <Text style={[styles.dateText, { color: colors.text }]}>
-                                                    {editedDueDate.toLocaleDateString('tr-TR')}
-                                                </Text>
-                                            </TouchableOpacity>
-
-                                            {showDatePicker && (
-                                                <DateTimePicker
+                                            {Platform.OS === 'web' ? (
+                                                <DatePicker
                                                     value={editedDueDate}
-                                                    mode="date"
-                                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                                                     onChange={onDateChange}
                                                     minimumDate={new Date()}
                                                 />
+                                            ) : (
+                                                <>
+                                                    <TouchableOpacity
+                                                        style={[styles.datePickerButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+                                                        onPress={() => setShowDatePicker(true)}
+                                                    >
+                                                        <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+                                                        <Text style={[styles.dateText, { color: colors.text }]}>
+                                                            {editedDueDate.toLocaleDateString('tr-TR')}
+                                                        </Text>
+                                                    </TouchableOpacity>
+
+                                                    {showDatePicker && (
+                                                        <DatePicker
+                                                            value={editedDueDate}
+                                                            mode="date"
+                                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                                            onChange={onDateChange}
+                                                            minimumDate={new Date()}
+                                                        />
+                                                    )}
+                                                </>
                                             )}
                                         </View>
                                     </View>

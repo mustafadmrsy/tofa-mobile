@@ -2,6 +2,7 @@ import { Colors, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
+import { Platform } from 'react-native';
 
 export default function TeamManagerLayout() {
     const { colorScheme } = useTheme();
@@ -15,6 +16,12 @@ export default function TeamManagerLayout() {
                 tabBarStyle: {
                     backgroundColor: colors.card,
                     borderTopColor: colors.border,
+                    ...(Platform.OS === 'web'
+                        ? {
+                            height: 65,
+                            paddingBottom: 10,
+                        }
+                        : {}),
                 },
                 headerStyle: {
                     backgroundColor: colors.card,

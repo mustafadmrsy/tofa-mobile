@@ -16,6 +16,7 @@ import {
     Animated,
     FlatList,
     RefreshControl,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -199,7 +200,11 @@ export default function AllTasksScreen() {
                     </View>
 
                     {/* Status Filter */}
-                    <View style={styles.filterContainer}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.filterContainer}
+                    >
                         {[
                             { label: 'Tümü', value: null },
                             { label: 'Yapılacak', value: TaskStatus.TODO },
@@ -228,7 +233,7 @@ export default function AllTasksScreen() {
                                 </Text>
                             </TouchableOpacity>
                         ))}
-                    </View>
+                    </ScrollView>
                 </View>
             </LinearGradient>
 
@@ -351,7 +356,7 @@ const styles = StyleSheet.create({
     },
     filterContainer: {
         flexDirection: 'row',
-        gap: Spacing.sm,
+        marginBottom: Spacing.xs,
     },
     content: {
         flex: 1,
