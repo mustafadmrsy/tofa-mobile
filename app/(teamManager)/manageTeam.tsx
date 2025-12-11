@@ -1,5 +1,6 @@
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 import { showToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,7 +14,6 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
     Animated,
     RefreshControl,
     ScrollView,
@@ -41,6 +41,8 @@ export default function ManageTeamScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [showAddUser, setShowAddUser] = useState(false);
+    const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+    const [memberToRemove, setMemberToRemove] = useState<User | null>(null);
     const fadeAnim = useState(new Animated.Value(0))[0];
 
     useEffect(() => {
@@ -110,27 +112,24 @@ export default function ManageTeamScreen() {
             return;
         }
 
-        Alert.alert(
-            'Üyeyi Çıkar',
-            `${member.name} kişisini ekipten çıkarmak istediğinizden emin misiniz?`,
-            [
-                { text: 'İptal', style: 'cancel' },
-                {
-                    text: 'Çıkar',
-                    style: 'destructive',
-                    onPress: async () => {
-                        try {
-                            await removeTeamMember(team.id, member.id);
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                            showToast.success('Kullanıcı ekipten çıkarıldı');
-                            loadTeam();
-                        } catch (error: any) {
-                            showToast.error(error.message || 'Kullanıcı çıkarılamadı');
-                        }
-                    },
-                },
-            ]
-        );
+        setMemberToRemove(member);
+        setShowRemoveConfirm(true);
+    };
+
+    const confirmRemove = async () => {
+        if (!team || !memberToRemove) return;
+
+        try {
+            await removeTeamMember(team.id, memberToRemove.id);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            showToast.success('Kullanıcı ekipten çıkarıldı');
+            loadTeam();
+        } catch (error: any) {
+            showToast.error(error.message || 'Kullanıcı çıkarılamadı');
+        } finally {
+            setShowRemoveConfirm(false);
+            setMemberToRemove(null);
+        }
     };
 
     if (loading) {
@@ -281,6 +280,21 @@ export default function ManageTeamScreen() {
                     )}
                 </ScrollView>
             </Animated.View>
+
+            {/* Remove Member Confirmation Modal */}
+            <ConfirmationModal
+                visible={showRemoveConfirm}
+                title="Üyeyi Çıkar"
+                message={`${memberToRemove?.name} kişisini ekipten çıkarmak istediğinizden emin misiniz?`}
+                confirmText="Çıkar"
+                cancelText="İptal"
+                onConfirm={confirmRemove}
+                onCancel={() => {
+                    setShowRemoveConfirm(false);
+                    setMemberToRemove(null);
+                }}
+                type="warning"
+            />
         </View>
     );
 }

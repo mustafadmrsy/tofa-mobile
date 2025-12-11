@@ -59,6 +59,7 @@ export default function TeamManagerLayout() {
                 name="profile"
                 options={{
                     title: 'Profil',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="person-outline" size={size} color={color} />
                     ),

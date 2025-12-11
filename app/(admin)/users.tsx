@@ -1,13 +1,15 @@
 import { EmptyState } from '@/components/EmptyState';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { Card } from '@/components/ui/Card';
-import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
+import { Animations, BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getAllTeams, getAllUsers } from '@/services/firestoreService';
 import { Team, User, UserRole } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
+    Animated,
     FlatList,
     RefreshControl,
     StyleSheet,
@@ -16,6 +18,13 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+
+const getHeaderGradient = (colorScheme: 'light' | 'dark'): readonly [string, string, string] => {
+    if (colorScheme === 'dark') {
+        return ['#1e3a5f', '#2d4a6f', '#1a2f4a'] as const;
+    }
+    return ['#0066CC', '#0052A3', '#003D7A'] as const;
+};
 
 export default function UsersScreen() {
     const { colorScheme } = useTheme();
@@ -28,6 +37,7 @@ export default function UsersScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterRole, setFilterRole] = useState<string | null>(null);
+    const fadeAnim = useState(new Animated.Value(0))[0];
 
     useEffect(() => {
         loadData();
@@ -50,6 +60,13 @@ export default function UsersScreen() {
             const teamMap = new Map<string, Team>();
             allTeams.forEach(team => teamMap.set(team.id, team));
             setTeams(teamMap);
+
+            // Fade in animation
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: Animations.duration.normal,
+                useNativeDriver: true,
+            }).start();
         } catch (error) {
             console.error('Load data error:', error);
         } finally {
@@ -114,112 +131,138 @@ export default function UsersScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Header */}
-            <View style={styles.header}>
-                <Text style={[styles.title, { color: colors.text }]}>Kullanıcılar</Text>
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                    {filteredUsers.length} / {users.length} kullanıcı
-                </Text>
-            </View>
+            {/* Premium Gradient Header */}
+            <LinearGradient
+                colors={getHeaderGradient(colorScheme)}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.header}
+            >
+                <View style={styles.headerContent}>
+                    <View style={styles.headerTop}>
+                        <View>
+                            <Text style={styles.headerTitle}>Kullanıcılar</Text>
+                            <Text style={styles.headerSubtitle}>
+                                {filteredUsers.length} / {users.length} kullanıcı
+                            </Text>
+                        </View>
+                        <View style={styles.headerIcon}>
+                            <Ionicons name="people-circle" size={32} color="#FFFFFF" />
+                        </View>
+                    </View>
 
-            {/* Search Bar */}
-            <View style={styles.searchContainer}>
-                <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Ionicons name="search" size={20} color={colors.textSecondary} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.text }]}
-                        placeholder="Kullanıcı ara..."
-                        placeholderTextColor={colors.textSecondary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')}>
-                            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    )}
+                    {/* Search Bar */}
+                    <View style={styles.searchContainer}>
+                        <View style={[styles.searchBar, { backgroundColor: 'rgba(255, 255, 255, 0.2)', borderColor: 'rgba(255, 255, 255, 0.3)' }]}>
+                            <Ionicons name="search" size={20} color="#FFFFFF" />
+                            <TextInput
+                                style={[styles.searchInput, { color: '#FFFFFF' }]}
+                                placeholder="Kullanıcı ara..."
+                                placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                                value={searchQuery}
+                                onChangeText={setSearchQuery}
+                            />
+                            {searchQuery.length > 0 && (
+                                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                    <Ionicons name="close-circle" size={20} color="#FFFFFF" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* Role Filter */}
+                    <View style={styles.filterContainer}>
+                        {[
+                            { label: 'Tümü', value: null },
+                            { label: 'Admin', value: UserRole.SUPER_ADMIN },
+                            { label: 'Yönetici', value: UserRole.TEAM_MANAGER },
+                            { label: 'Kullanıcı', value: UserRole.USER },
+                        ].map((filter) => (
+                            <TouchableOpacity
+                                key={filter.label}
+                                style={[
+                                    styles.filterChip,
+                                    {
+                                        backgroundColor: filterRole === filter.value ? '#FFFFFF' : 'rgba(255, 255, 255, 0.2)',
+                                        borderColor: filterRole === filter.value ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)',
+                                    },
+                                ]}
+                                onPress={() => setFilterRole(filter.value)}
+                            >
+                                <Text
+                                    style={[
+                                        styles.filterText,
+                                        { color: filterRole === filter.value ? colors.primary : '#FFFFFF' },
+                                    ]}
+                                >
+                                    {filter.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </View>
-            </View>
-
-            {/* Role Filter */}
-            <View style={styles.filterContainer}>
-                {[
-                    { label: 'Tümü', value: null },
-                    { label: 'Admin', value: UserRole.SUPER_ADMIN },
-                    { label: 'Yönetici', value: UserRole.TEAM_MANAGER },
-                    { label: 'Kullanıcı', value: UserRole.USER },
-                ].map((filter) => (
-                    <TouchableOpacity
-                        key={filter.label}
-                        style={[
-                            styles.filterChip,
-                            {
-                                backgroundColor: filterRole === filter.value ? colors.primary : colors.card,
-                                borderColor: filterRole === filter.value ? colors.primary : colors.border,
-                            },
-                        ]}
-                        onPress={() => setFilterRole(filter.value)}
-                    >
-                        <Text
-                            style={[
-                                styles.filterText,
-                                { color: filterRole === filter.value ? '#fff' : colors.text },
-                            ]}
-                        >
-                            {filter.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+            </LinearGradient>
 
             {/* User List */}
-            {filteredUsers.length === 0 ? (
-                <EmptyState
-                    icon="people-outline"
-                    title={searchQuery ? 'Kullanıcı bulunamadı' : 'Henüz kullanıcı yok'}
-                    message={searchQuery ? 'Farklı bir arama terimi deneyin' : 'Sistemde henüz kullanıcı bulunmuyor'}
-                />
-            ) : (
-                <FlatList
-                    data={filteredUsers}
-                    renderItem={({ item }) => (
-                        <Card>
-                            <View style={styles.userItem}>
-                                <View style={styles.userInfo}>
-                                    <Text style={[styles.userName, { color: colors.text }]}>
-                                        {item.name}
-                                    </Text>
-                                    <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
-                                        {item.email}
-                                    </Text>
-                                    {item.teamId && teams.get(item.teamId) && (
+            <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+                {filteredUsers.length === 0 ? (
+                    <EmptyState
+                        icon="people-outline"
+                        title={searchQuery ? 'Kullanıcı bulunamadı' : 'Henüz kullanıcı yok'}
+                        message={searchQuery ? 'Farklı bir arama terimi deneyin' : 'Sistemde henüz kullanıcı bulunmuyor'}
+                    />
+                ) : (
+                    <FlatList
+                        data={filteredUsers}
+                        renderItem={({ item }) => (
+                            <Card>
+                                <View style={styles.userItem}>
+                                    <View style={styles.userInfo}>
+                                        <Text style={[styles.userName, { color: colors.text }]}>
+                                            {item.name}
+                                        </Text>
+                                        <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
+                                            {item.email}
+                                        </Text>
                                         <View style={styles.teamInfo}>
-                                            <Ionicons name="people" size={12} color={colors.textSecondary} />
-                                            <Text style={[styles.teamText, { color: colors.textSecondary }]}>
-                                                {teams.get(item.teamId)?.name}
+                                            <Ionicons
+                                                name={item.teamId && teams.get(item.teamId) ? "people" : "people-outline"}
+                                                size={14}
+                                                color={item.teamId && teams.get(item.teamId) ? colors.primary : colors.textSecondary}
+                                            />
+                                            <Text style={[
+                                                styles.teamText,
+                                                {
+                                                    color: item.teamId && teams.get(item.teamId) ? colors.primary : colors.textSecondary,
+                                                    fontWeight: item.teamId && teams.get(item.teamId) ? '600' : '400'
+                                                }
+                                            ]}>
+                                                {item.teamId && teams.get(item.teamId)
+                                                    ? teams.get(item.teamId)?.name
+                                                    : 'Ekip yok'}
                                             </Text>
                                         </View>
-                                    )}
+                                    </View>
+                                    <View style={[styles.roleBadge, { backgroundColor: getRoleColor(item.role) + '20' }]}>
+                                        <Text style={[styles.roleText, { color: getRoleColor(item.role) }]}>
+                                            {getRoleLabel(item.role)}
+                                        </Text>
+                                    </View>
                                 </View>
-                                <View style={[styles.roleBadge, { backgroundColor: getRoleColor(item.role) + '20' }]}>
-                                    <Text style={[styles.roleText, { color: getRoleColor(item.role) }]}>
-                                        {getRoleLabel(item.role)}
-                                    </Text>
-                                </View>
-                            </View>
-                        </Card>
-                    )}
-                    keyExtractor={(item) => item.id}
-                    contentContainerStyle={styles.listContent}
-                    refreshControl={
-                        <RefreshControl
-                            refreshing={refreshing}
-                            onRefresh={onRefresh}
-                            tintColor={colors.primary}
-                        />
-                    }
-                />
-            )}
+                            </Card>
+                        )}
+                        keyExtractor={(item) => item.id}
+                        contentContainerStyle={styles.listContent}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={onRefresh}
+                                tintColor={colors.primary}
+                            />
+                        }
+                    />
+                )}
+            </Animated.View>
         </View>
     );
 }
@@ -229,21 +272,42 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.xl,
-        paddingBottom: Spacing.md,
+        paddingTop: 60,
+        paddingBottom: Spacing.xl,
+        borderBottomLeftRadius: BorderRadius['2xl'],
+        borderBottomRightRadius: BorderRadius['2xl'],
     },
-    title: {
-        fontSize: Typography.fontSize['2xl'],
+    headerContent: {
+        paddingHorizontal: Spacing.lg,
+    },
+    headerTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    headerTitle: {
+        fontSize: Typography.fontSize['3xl'],
         fontWeight: Typography.fontWeight.bold,
+        color: '#FFFFFF',
         marginBottom: Spacing.xs,
     },
-    subtitle: {
+    headerSubtitle: {
         fontSize: Typography.fontSize.base,
+        color: '#FFFFFF',
+        opacity: 0.9,
+        fontWeight: Typography.fontWeight.medium,
+    },
+    headerIcon: {
+        width: 56,
+        height: 56,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     searchContainer: {
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.md,
+        marginTop: Spacing.lg,
+        marginBottom: Spacing.md,
     },
     searchBar: {
         flexDirection: 'row',
@@ -262,8 +326,9 @@ const styles = StyleSheet.create({
     filterContainer: {
         flexDirection: 'row',
         gap: Spacing.sm,
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.md,
+    },
+    content: {
+        flex: 1,
     },
     filterChip: {
         paddingHorizontal: Spacing.md,
@@ -277,6 +342,7 @@ const styles = StyleSheet.create({
     },
     listContent: {
         paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.lg,
         paddingBottom: Spacing.xl,
     },
     userItem: {
@@ -299,11 +365,11 @@ const styles = StyleSheet.create({
     teamInfo: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        marginTop: 2,
+        gap: 6,
+        marginTop: 6,
     },
     teamText: {
-        fontSize: Typography.fontSize.xs,
+        fontSize: Typography.fontSize.sm,
     },
     roleBadge: {
         paddingHorizontal: Spacing.sm,

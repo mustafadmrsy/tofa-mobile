@@ -1,9 +1,11 @@
 import { showToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Colors, Spacing, Typography } from '@/constants/theme';
+import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -15,11 +17,20 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const getHeaderGradient = (colorScheme: 'light' | 'dark'): readonly [string, string, string] => {
+    if (colorScheme === 'dark') {
+        return ['#1e3a5f', '#2d4a6f', '#1a2f4a'] as const;
+    }
+    return ['#0066CC', '#0052A3', '#003D7A'] as const;
+};
 
 export default function LoginScreen() {
     const { colorScheme } = useTheme();
     const { signIn } = useAuth();
     const colors = Colors[colorScheme];
+    const insets = useSafeAreaInsets();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -60,80 +71,90 @@ export default function LoginScreen() {
     };
 
     return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-            <ScrollView
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-                style={{ backgroundColor: colors.background }}
+        <View style={[styles.container, { backgroundColor: colors.background }]}>
+            {/* Premium Gradient Header */}
+            <LinearGradient
+                colors={getHeaderGradient(colorScheme)}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.gradientHeader, { paddingTop: insets.top + Spacing.lg }]}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={[styles.title, { color: colors.text }]}>
-                        Hoş Geldiniz
-                    </Text>
-                    <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                        Hesabınıza giriş yapın
-                    </Text>
+                <View style={styles.headerContent}>
+                    <View style={styles.appIconContainer}>
+                        <View style={styles.appIcon}>
+                            <Ionicons name="clipboard" size={40} color="#FFFFFF" />
+                        </View>
+                    </View>
+                    <Text style={styles.welcomeTitle}>Hoş Geldiniz</Text>
+                    <Text style={styles.welcomeSubtitle}>Hesabınıza giriş yapın</Text>
                 </View>
+            </LinearGradient>
 
-                {/* Form */}
-                <View style={styles.form}>
-                    <Input
-                        label="E-posta"
-                        placeholder="ornek@email.com"
-                        value={email}
-                        onChangeText={(text) => {
-                            setEmail(text);
-                            setErrors({ ...errors, email: undefined });
-                        }}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        autoComplete="email"
-                        leftIcon="mail-outline"
-                        error={errors.email}
-                    />
+            <KeyboardAvoidingView
+                style={styles.keyboardView}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+                <ScrollView
+                    contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xl }]}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Form */}
+                    <View style={styles.form}>
+                        <Input
+                            label="E-posta"
+                            placeholder="ornek@email.com"
+                            value={email}
+                            onChangeText={(text) => {
+                                setEmail(text);
+                                setErrors({ ...errors, email: undefined });
+                            }}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoComplete="email"
+                            leftIcon="mail-outline"
+                            error={errors.email}
+                        />
 
-                    <Input
-                        label="Şifre"
-                        placeholder="••••••••"
-                        value={password}
-                        onChangeText={(text) => {
-                            setPassword(text);
-                            setErrors({ ...errors, password: undefined });
-                        }}
-                        secureTextEntry
-                        autoComplete="password"
-                        leftIcon="lock-closed-outline"
-                        error={errors.password}
-                    />
+                        <Input
+                            label="Şifre"
+                            placeholder="••••••••"
+                            value={password}
+                            onChangeText={(text) => {
+                                setPassword(text);
+                                setErrors({ ...errors, password: undefined });
+                            }}
+                            secureTextEntry
+                            autoComplete="password"
+                            leftIcon="lock-closed-outline"
+                            error={errors.password}
+                        />
 
-                    <Button
-                        title="Giriş Yap"
-                        onPress={handleLogin}
-                        loading={loading}
-                        fullWidth
-                        variant="primary"
-                        size="lg"
-                        style={styles.loginButton}
-                    />
-                </View>
+                        <Button
+                            title="Giriş Yap"
+                            onPress={handleLogin}
+                            loading={loading}
+                            fullWidth
+                            variant="primary"
+                            size="lg"
+                            style={styles.loginButton}
+                        />
+                    </View>
 
-                {/* Footer */}
-                <View style={styles.footer}>
-                    <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-                        Hesabınız yok mu?{' '}
-                    </Text>
-                    <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-                        <Text style={[styles.link, { color: colors.primary }]}>
-                            Kayıt Olun
+                    {/* Footer */}
+                    <View style={styles.footer}>
+                        <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                            Hesabınız yok mu?{' '}
                         </Text>
-                    </TouchableOpacity>
-                </View>
-            </ScrollView>
-        </KeyboardAvoidingView>
+                        <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+                            <Text style={[styles.link, { color: colors.primary }]}>
+                                Kayıt Olun
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </View>
     );
 }
 
@@ -141,22 +162,46 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    gradientHeader: {
+        paddingBottom: Spacing.xl,
+        borderBottomLeftRadius: BorderRadius['2xl'],
+        borderBottomRightRadius: BorderRadius['2xl'],
+    },
+    headerContent: {
+        alignItems: 'center',
+        paddingHorizontal: Spacing.lg,
+    },
+    appIconContainer: {
+        marginBottom: Spacing.lg,
+    },
+    appIcon: {
+        width: 80,
+        height: 80,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 3,
+        borderColor: 'rgba(255, 255, 255, 0.3)',
+    },
+    welcomeTitle: {
+        fontSize: Typography.fontSize['3xl'],
+        fontWeight: Typography.fontWeight.bold,
+        color: '#FFFFFF',
+        marginBottom: Spacing.xs,
+    },
+    welcomeSubtitle: {
+        fontSize: Typography.fontSize.base,
+        color: '#FFFFFF',
+        opacity: 0.9,
+    },
+    keyboardView: {
+        flex: 1,
+    },
     scrollContent: {
         flexGrow: 1,
         paddingHorizontal: Spacing.xl,
-        paddingTop: Spacing['4xl'],
-        paddingBottom: Spacing['2xl'],
-    },
-    header: {
-        marginBottom: Spacing['3xl'],
-    },
-    title: {
-        fontSize: Typography.fontSize['3xl'],
-        fontWeight: Typography.fontWeight.bold,
-        marginBottom: Spacing.sm,
-    },
-    subtitle: {
-        fontSize: Typography.fontSize.lg,
+        paddingTop: Spacing.xl,
     },
     form: {
         marginBottom: Spacing.xl,
@@ -168,6 +213,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
+        marginTop: 'auto',
+        paddingTop: Spacing.xl,
     },
     footerText: {
         fontSize: Typography.fontSize.base,

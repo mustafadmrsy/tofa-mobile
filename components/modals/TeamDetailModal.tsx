@@ -1,3 +1,4 @@
+import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 import { showToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,17 +14,25 @@ import {
 } from '@/services/firestoreService';
 import { Team, User, UserRole } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
     Modal,
     ScrollView,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const getHeaderGradient = (colorScheme: 'light' | 'dark'): readonly [string, string, string] => {
+    if (colorScheme === 'dark') {
+        return ['#1e3a5f', '#2d4a6f', '#1a2f4a'] as const;
+    }
+    return ['#0066CC', '#0052A3', '#003D7A'] as const;
+};
 
 interface TeamDetailModalProps {
     visible: boolean;
@@ -42,6 +51,7 @@ export function TeamDetailModal({
 }: TeamDetailModalProps) {
     const { colorScheme } = useTheme();
     const colors = Colors[colorScheme];
+    const insets = useSafeAreaInsets();
 
     const [teamMembers, setTeamMembers] = useState<User[]>([]);
     const [manager, setManager] = useState<User | null>(null);
@@ -50,6 +60,7 @@ export function TeamDetailModal({
     const [loading, setLoading] = useState(false);
     const [editingName, setEditingName] = useState(false);
     const [teamName, setTeamName] = useState('');
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     useEffect(() => {
         if (visible && team) {
@@ -126,6 +137,7 @@ export function TeamDetailModal({
             showToast.success('Başarılı', 'Ekip adı güncellendi');
             setEditingName(false);
             onUpdated();
+            onClose(); // Modal'ı kapat
         } catch (error: any) {
             showToast.error('Hata', error.message || 'Ekip adı güncellenemedi');
         } finally {
@@ -135,31 +147,24 @@ export function TeamDetailModal({
 
     const handleDeleteTeam = () => {
         if (!team) return;
+        setShowDeleteConfirm(true);
+    };
 
-        Alert.alert(
-            'Ekibi Sil',
-            `${team.name} ekibini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
-            [
-                { text: 'İptal', style: 'cancel' },
-                {
-                    text: 'Sil',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            await deleteTeam(team.id);
-                            showToast.success('Başarılı', 'Ekip silindi');
-                            onDeleted();
-                            onClose();
-                        } catch (error: any) {
-                            showToast.error('Hata', error.message || 'Ekip silinemedi');
-                        } finally {
-                            setLoading(false);
-                        }
-                    },
-                },
-            ]
-        );
+    const confirmDelete = async () => {
+        if (!team) return;
+
+        setLoading(true);
+        setShowDeleteConfirm(false);
+        try {
+            await deleteTeam(team.id);
+            showToast.success('Başarılı', 'Ekip silindi');
+            onDeleted();
+            onClose();
+        } catch (error: any) {
+            showToast.error('Hata', error.message || 'Ekip silinemedi');
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (!team) return null;
@@ -169,45 +174,59 @@ export function TeamDetailModal({
             visible={visible}
             animationType="slide"
             transparent
+            statusBarTranslucent
             onRequestClose={onClose}
         >
-            <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-                    {/* Header */}
-                    <View style={styles.modalHeader}>
-                        <View style={styles.headerLeft}>
-                            <Ionicons name="people" size={24} color={colors.primary} />
+            <View style={[styles.modalOverlay, { paddingTop: insets.top }]}>
+                <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: insets.bottom }]}>
+                    {/* Gradient Header */}
+                    <LinearGradient
+                        colors={getHeaderGradient(colorScheme)}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.modalHeader}
+                    >
+                        <TouchableOpacity
+                            onPress={onClose}
+                            style={styles.closeButton}
+                        >
+                            <Ionicons name="close" size={24} color="#FFFFFF" />
+                        </TouchableOpacity>
+
+                        <View style={styles.headerContent}>
+                            <View style={styles.headerIcon}>
+                                <Ionicons name="people-circle" size={32} color="#FFFFFF" />
+                            </View>
                             {editingName ? (
                                 <View style={styles.nameEditContainer}>
                                     <TextInput
-                                        style={[styles.nameInput, { color: colors.text, borderColor: colors.border }]}
+                                        style={[styles.nameInput, { color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.5)' }]}
                                         value={teamName}
                                         onChangeText={setTeamName}
                                         autoFocus
+                                        placeholderTextColor="rgba(255,255,255,0.7)"
                                     />
-                                    <TouchableOpacity onPress={handleUpdateName} disabled={loading}>
-                                        <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                                    <TouchableOpacity onPress={handleUpdateName} disabled={loading} style={styles.editButton}>
+                                        <Ionicons name="checkmark-circle" size={28} color="#4CAF50" />
                                     </TouchableOpacity>
                                     <TouchableOpacity onPress={() => {
                                         setTeamName(team.name);
                                         setEditingName(false);
-                                    }}>
-                                        <Ionicons name="close-circle" size={24} color={colors.error} />
+                                    }} style={styles.editButton}>
+                                        <Ionicons name="close-circle" size={28} color="#F44336" />
                                     </TouchableOpacity>
                                 </View>
                             ) : (
-                                <TouchableOpacity onPress={() => setEditingName(true)} style={styles.nameContainer}>
-                                    <Text style={[styles.modalTitle, { color: colors.text }]}>
+                                <TouchableOpacity onPress={() => setEditingName(true)} style={styles.titleContainer}>
+                                    <Text style={styles.modalTitle}>
                                         {team.name}
                                     </Text>
-                                    <Ionicons name="pencil" size={16} color={colors.textSecondary} />
+                                    <Ionicons name="pencil" size={20} color="rgba(255,255,255,0.8)" style={styles.editIcon} />
                                 </TouchableOpacity>
                             )}
+                            <Text style={styles.modalSubtitle}>Ekip detaylarını yönetin</Text>
                         </View>
-                        <TouchableOpacity onPress={onClose}>
-                            <Ionicons name="close" size={24} color={colors.text} />
-                        </TouchableOpacity>
-                    </View>
+                    </LinearGradient>
 
                     <ScrollView style={styles.modalBody}>
                         {/* Manager Section */}
@@ -303,19 +322,32 @@ export function TeamDetailModal({
                                 loading={loading}
                             />
                         </Card>
+                        <View style={{ marginBottom: Spacing.xl }} />
                     </ScrollView>
 
                     {/* Footer */}
-                    <View style={styles.modalFooter}>
-                        <Button
-                            title="Kapat"
+                    <View style={[styles.modalFooter, { backgroundColor: colors.background }]}>
+                        <TouchableOpacity
                             onPress={onClose}
-                            variant="primary"
-                            fullWidth
-                        />
+                            style={[styles.footerButton, { backgroundColor: colors.primary }]}
+                        >
+                            <Text style={styles.footerButtonText}>Kapat</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </View>
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmationModal
+                visible={showDeleteConfirm}
+                title="Ekibi Sil"
+                message={`${team?.name} ekibini silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`}
+                confirmText="Sil"
+                cancelText="İptal"
+                onConfirm={confirmDelete}
+                onCancel={() => setShowDeleteConfirm(false)}
+                type="danger"
+            />
         </Modal>
     );
 }
@@ -332,42 +364,75 @@ const styles = StyleSheet.create({
         maxHeight: '90%',
     },
     modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: Spacing.lg,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+        paddingTop: Spacing.xl,
+        paddingBottom: Spacing.lg,
+        borderTopLeftRadius: BorderRadius.xl,
+        borderTopRightRadius: BorderRadius.xl,
     },
-    headerLeft: {
+    closeButton: {
+        position: 'absolute',
+        top: Spacing.md,
+        left: Spacing.md,
+        zIndex: 10,
+        width: 40,
+        height: 40,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    headerContent: {
+        alignItems: 'center',
+    },
+    headerIcon: {
+        width: 64,
+        height: 64,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: Spacing.md,
+    },
+    titleContainer: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: Spacing.sm,
-        flex: 1,
+        marginBottom: Spacing.xs,
     },
-    nameContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
+    editIcon: {
+        marginLeft: Spacing.xs,
     },
     nameEditContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.xs,
-        flex: 1,
+        gap: Spacing.sm,
+        width: '80%',
+        marginBottom: Spacing.xs,
+    },
+    editButton: {
+        padding: Spacing.xs,
     },
     nameInput: {
         flex: 1,
         fontSize: Typography.fontSize.lg,
         fontWeight: Typography.fontWeight.bold,
-        borderWidth: 1,
-        borderRadius: BorderRadius.sm,
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: Spacing.xs,
+        borderWidth: 1.5,
+        borderRadius: BorderRadius.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        textAlign: 'center',
+        color: '#FFFFFF',
     },
     modalTitle: {
-        fontSize: Typography.fontSize.xl,
+        fontSize: Typography.fontSize['2xl'],
         fontWeight: Typography.fontWeight.bold,
+        color: '#FFFFFF',
+    },
+    modalSubtitle: {
+        fontSize: Typography.fontSize.sm,
+        color: '#FFFFFF',
+        opacity: 0.9,
     },
     modalBody: {
         padding: Spacing.lg,
@@ -447,7 +512,20 @@ const styles = StyleSheet.create({
     },
     modalFooter: {
         padding: Spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.1)',
+        paddingBottom: Spacing.xl,
+        borderTopWidth: 2,
+        borderTopColor: 'rgba(0, 0, 0, 0.08)',
+    },
+    footerButton: {
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    footerButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#FFFFFF',
     },
 });

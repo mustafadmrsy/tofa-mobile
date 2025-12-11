@@ -1,6 +1,8 @@
+import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 import { showToast } from '@/components/ToastProvider';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -10,16 +12,15 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
     Modal,
     Platform,
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface TaskDetailModalProps {
     visible: boolean;
@@ -37,6 +38,7 @@ export function TaskDetailModal({
     const { colorScheme } = useTheme();
     const { user } = useAuth();
     const colors = Colors[colorScheme];
+    const insets = useSafeAreaInsets();
 
     const [loading, setLoading] = useState(false);
     const [assignedUser, setAssignedUser] = useState<string>('');
@@ -45,6 +47,7 @@ export function TaskDetailModal({
     const [editedDescription, setEditedDescription] = useState('');
     const [editedDueDate, setEditedDueDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     useEffect(() => {
         if (task) {
@@ -68,6 +71,8 @@ export function TaskDetailModal({
         try {
             await updateTaskStatus(task.id, newStatus);
             onUpdated();
+            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
             onClose(); // Modal'ı otomatik kapat
         } catch (error: any) {
             showToast.error('Hata', error.message || 'Durum güncellenemedi');
@@ -94,6 +99,8 @@ export function TaskDetailModal({
             showToast.success('Başarılı', 'Görev güncellendi');
             setEditing(false);
             onUpdated();
+            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
         } catch (error: any) {
             showToast.error('Hata', error.message || 'Görev güncellenemedi');
         } finally {
@@ -103,31 +110,26 @@ export function TaskDetailModal({
 
     const handleDelete = () => {
         if (!task) return;
+        setShowDeleteConfirm(true);
+    };
 
-        Alert.alert(
-            'Görevi Sil',
-            'Bu görevi silmek istediğinizden emin misiniz?',
-            [
-                { text: 'İptal', style: 'cancel' },
-                {
-                    text: 'Sil',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setLoading(true);
-                        try {
-                            await deleteTask(task.id);
-                            showToast.success('Başarılı', 'Görev silindi');
-                            onUpdated();
-                            onClose();
-                        } catch (error: any) {
-                            showToast.error('Hata', error.message || 'Görev silinemedi');
-                        } finally {
-                            setLoading(false);
-                        }
-                    },
-                },
-            ]
-        );
+    const confirmDelete = async () => {
+        if (!task) return;
+
+        setLoading(true);
+        setShowDeleteConfirm(false);
+        try {
+            await deleteTask(task.id);
+            showToast.success('Başarılı', 'Görev silindi');
+            onUpdated();
+            onClose(); // Modal'� kapat
+            onClose(); // Modal'� kapat
+            onClose();
+        } catch (error: any) {
+            showToast.error('Hata', error.message || 'Görev silinemedi');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const onDateChange = (event: any, selectedDate?: Date) => {
@@ -158,8 +160,25 @@ export function TaskDetailModal({
                 return 'Devam Ediyor';
             case TaskStatus.COMPLETED:
                 return 'Tamamlandı';
+            case TaskStatus.OVERDUE:
+                return 'Süresi Geçti';
             default:
                 return status;
+        }
+    };
+
+    const getStatusIcon = (status: TaskStatus) => {
+        switch (status) {
+            case TaskStatus.TODO:
+                return 'ellipse-outline';
+            case TaskStatus.IN_PROGRESS:
+                return 'hourglass-outline';
+            case TaskStatus.COMPLETED:
+                return 'checkmark-circle';
+            case TaskStatus.OVERDUE:
+                return 'alert-circle';
+            default:
+                return 'ellipse-outline';
         }
     };
 
@@ -172,26 +191,27 @@ export function TaskDetailModal({
             visible={visible}
             animationType="slide"
             transparent
+            statusBarTranslucent
             onRequestClose={onClose}
         >
-            <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-                    {/* Header */}
-                    <View style={styles.modalHeader}>
+            <View style={[styles.modalOverlay, { paddingTop: insets.top }]}>
+                <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: insets.bottom }]}>
+                    {/* Simple Header */}
+                    <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
                         <View style={styles.headerLeft}>
-                            <Ionicons name="checkbox" size={24} color={colors.primary} />
+                            <View style={[styles.statusDot, { backgroundColor: getStatusColor(task.status) }]} />
                             <Text style={[styles.modalTitle, { color: colors.text }]} numberOfLines={1}>
                                 {editing ? 'Görevi Düzenle' : 'Görev Detayı'}
                             </Text>
                         </View>
                         <View style={styles.headerRight}>
                             {canEdit && !editing && (
-                                <TouchableOpacity onPress={() => setEditing(true)} style={styles.editButton}>
+                                <TouchableOpacity onPress={() => setEditing(true)} style={styles.editIconButton}>
                                     <Ionicons name="pencil" size={20} color={colors.primary} />
                                 </TouchableOpacity>
                             )}
-                            <TouchableOpacity onPress={onClose}>
-                                <Ionicons name="close" size={24} color={colors.text} />
+                            <TouchableOpacity onPress={onClose} style={styles.closeIconButton}>
+                                <Ionicons name="close" size={24} color={colors.textSecondary} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -201,46 +221,61 @@ export function TaskDetailModal({
                         <Card>
                             {editing ? (
                                 <>
-                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Başlık</Text>
-                                    <TextInput
-                                        style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-                                        value={editedTitle}
-                                        onChangeText={setEditedTitle}
-                                        placeholder="Görev başlığı"
-                                        placeholderTextColor={colors.textSecondary}
-                                    />
+                                    {/* Edit Mode with Icons */}
+                                    <View style={styles.editContainer}>
+                                        <View style={styles.inputWrapper}>
+                                            <View style={styles.inputLabel}>
+                                                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+                                                <Text style={[styles.label, { color: colors.text }]}>Görev Başlığı</Text>
+                                            </View>
+                                            <Input
+                                                value={editedTitle}
+                                                onChangeText={setEditedTitle}
+                                                placeholder="Görev başlığı"
+                                            />
+                                        </View>
 
-                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Açıklama</Text>
-                                    <TextInput
-                                        style={[styles.input, styles.textArea, { color: colors.text, borderColor: colors.border }]}
-                                        value={editedDescription}
-                                        onChangeText={setEditedDescription}
-                                        placeholder="Görev açıklaması"
-                                        placeholderTextColor={colors.textSecondary}
-                                        multiline
-                                        numberOfLines={4}
-                                    />
+                                        <View style={styles.inputWrapper}>
+                                            <View style={styles.inputLabel}>
+                                                <Ionicons name="list-outline" size={20} color={colors.primary} />
+                                                <Text style={[styles.label, { color: colors.text }]}>Açıklama</Text>
+                                            </View>
+                                            <Input
+                                                value={editedDescription}
+                                                onChangeText={setEditedDescription}
+                                                placeholder="Görev açıklaması"
+                                                multiline
+                                                numberOfLines={4}
+                                                style={styles.textAreaInput}
+                                            />
+                                        </View>
 
-                                    <Text style={[styles.label, { color: colors.textSecondary }]}>Bitiş Tarihi</Text>
-                                    <TouchableOpacity
-                                        style={[styles.dateButton, { borderColor: colors.border }]}
-                                        onPress={() => setShowDatePicker(true)}
-                                    >
-                                        <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-                                        <Text style={[styles.dateText, { color: colors.text }]}>
-                                            {editedDueDate.toLocaleDateString('tr-TR')}
-                                        </Text>
-                                    </TouchableOpacity>
+                                        <View style={styles.inputWrapper}>
+                                            <View style={styles.inputLabel}>
+                                                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                                                <Text style={[styles.label, { color: colors.text }]}>Bitiş Tarihi</Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                style={[styles.datePickerButton, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border }]}
+                                                onPress={() => setShowDatePicker(true)}
+                                            >
+                                                <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+                                                <Text style={[styles.dateText, { color: colors.text }]}>
+                                                    {editedDueDate.toLocaleDateString('tr-TR')}
+                                                </Text>
+                                            </TouchableOpacity>
 
-                                    {showDatePicker && (
-                                        <DateTimePicker
-                                            value={editedDueDate}
-                                            mode="date"
-                                            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                                            onChange={onDateChange}
-                                            minimumDate={new Date()}
-                                        />
-                                    )}
+                                            {showDatePicker && (
+                                                <DateTimePicker
+                                                    value={editedDueDate}
+                                                    mode="date"
+                                                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                                    onChange={onDateChange}
+                                                    minimumDate={new Date()}
+                                                />
+                                            )}
+                                        </View>
+                                    </View>
                                 </>
                             ) : (
                                 <>
@@ -280,12 +315,12 @@ export function TaskDetailModal({
                         {/* Status Section */}
                         {!editing && (
                             <Card>
-                                <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
-                                    Durum
+                                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                                    Görev Durumu
                                 </Text>
 
                                 <View style={styles.statusButtons}>
-                                    {Object.values(TaskStatus).map((status) => (
+                                    {[TaskStatus.TODO, TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED].map((status) => (
                                         <TouchableOpacity
                                             key={status}
                                             style={[
@@ -293,7 +328,7 @@ export function TaskDetailModal({
                                                 {
                                                     backgroundColor:
                                                         task.status === status
-                                                            ? getStatusColor(status) + '20'
+                                                            ? getStatusColor(status)
                                                             : colors.backgroundSecondary,
                                                     borderColor:
                                                         task.status === status
@@ -304,13 +339,22 @@ export function TaskDetailModal({
                                             onPress={() => handleStatusChange(status)}
                                             disabled={loading}
                                         >
+                                            <Ionicons
+                                                name={getStatusIcon(status)}
+                                                size={24}
+                                                color={
+                                                    task.status === status
+                                                        ? '#FFFFFF'
+                                                        : colors.textSecondary
+                                                }
+                                            />
                                             <Text
                                                 style={[
                                                     styles.statusButtonText,
                                                     {
                                                         color:
                                                             task.status === status
-                                                                ? getStatusColor(status)
+                                                                ? '#FFFFFF'
                                                                 : colors.textSecondary,
                                                     },
                                                 ]}
@@ -320,6 +364,16 @@ export function TaskDetailModal({
                                         </TouchableOpacity>
                                     ))}
                                 </View>
+
+                                {/* Overdue uyarısı - sadece gösterim */}
+                                {task.status === TaskStatus.OVERDUE && (
+                                    <View style={[styles.overdueWarning, { backgroundColor: colors.error + '15', borderColor: colors.error }]}>
+                                        <Ionicons name="alert-circle" size={20} color={colors.error} />
+                                        <Text style={[styles.overdueWarningText, { color: colors.error }]}>
+                                            Bu görevin süresi geçmiş. Tamamlamak için durumunu değiştirin.
+                                        </Text>
+                                    </View>
+                                )}
                             </Card>
                         )}
 
@@ -338,40 +392,60 @@ export function TaskDetailModal({
                                 />
                             </Card>
                         )}
+                        <View style={{ marginBottom: Spacing.xl }} />
                     </ScrollView>
 
                     {/* Footer */}
-                    <View style={styles.modalFooter}>
+                    <View style={[styles.modalFooter, { backgroundColor: colors.background }]}>
                         {editing ? (
                             <>
-                                <Button
-                                    title="İptal"
+                                <TouchableOpacity
                                     onPress={() => {
                                         setEditing(false);
                                         setEditedTitle(task.title);
                                         setEditedDescription(task.description || '');
                                         setEditedDueDate(task.dueDate);
                                     }}
-                                    variant="outline"
-                                    style={{ flex: 1 }}
-                                />
-                                <Button
-                                    title="Kaydet"
+                                    style={[styles.footerButton, styles.cancelButton, { borderColor: colors.border }]}
+                                    disabled={loading}
+                                >
+                                    <Text style={[styles.footerButtonText, { color: colors.text }]}>İptal</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
                                     onPress={handleSaveEdit}
-                                    loading={loading}
-                                    style={{ flex: 1 }}
-                                />
+                                    style={[styles.footerButton, styles.saveButton, { backgroundColor: colors.primary }]}
+                                    disabled={loading}
+                                >
+                                    {loading ? (
+                                        <Text style={[styles.footerButtonText, { color: '#FFFFFF' }]}>Kaydediliyor...</Text>
+                                    ) : (
+                                        <Text style={[styles.footerButtonText, { color: '#FFFFFF' }]}>Kaydet</Text>
+                                    )}
+                                </TouchableOpacity>
                             </>
                         ) : (
-                            <Button
-                                title="Kapat"
+                            <TouchableOpacity
                                 onPress={onClose}
-                                variant="primary"
-                            />
+                                style={[styles.footerButton, { backgroundColor: colors.primary }]}
+                            >
+                                <Text style={[styles.footerButtonText, { color: '#FFFFFF' }]}>Kapat</Text>
+                            </TouchableOpacity>
                         )}
                     </View>
                 </View>
             </View>
+
+            {/* Delete Confirmation Modal */}
+            <ConfirmationModal
+                visible={showDeleteConfirm}
+                title="Görevi Sil"
+                message="Bu görevi silmek istediğinizden emin misiniz? Bu işlem geri alınamaz."
+                confirmText="Sil"
+                cancelText="İptal"
+                onConfirm={confirmDelete}
+                onCancel={() => setShowDeleteConfirm(false)}
+                type="danger"
+            />
         </Modal>
     );
 }
@@ -401,10 +475,21 @@ const styles = StyleSheet.create({
         gap: Spacing.sm,
         flex: 1,
     },
+    statusDot: {
+        width: 12,
+        height: 12,
+        borderRadius: BorderRadius.full,
+    },
     headerRight: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.md,
+    },
+    editIconButton: {
+        padding: Spacing.xs,
+    },
+    closeIconButton: {
+        padding: Spacing.xs,
     },
     editButton: {
         padding: Spacing.xs,
@@ -416,6 +501,31 @@ const styles = StyleSheet.create({
     },
     modalBody: {
         padding: Spacing.lg,
+    },
+    editContainer: {
+        gap: Spacing.md,
+    },
+    inputWrapper: {
+        marginBottom: Spacing.md,
+    },
+    inputLabel: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    textAreaInput: {
+        minHeight: 100,
+        textAlignVertical: 'top',
+    },
+    datePickerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.md,
+        borderRadius: BorderRadius.md,
+        borderWidth: 1,
     },
     label: {
         fontSize: Typography.fontSize.sm,
@@ -467,24 +577,41 @@ const styles = StyleSheet.create({
         fontSize: Typography.fontSize.sm,
     },
     sectionTitle: {
-        fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semibold,
-        marginBottom: Spacing.md,
-        textTransform: 'uppercase',
+        fontSize: Typography.fontSize.base,
+        fontWeight: Typography.fontWeight.bold,
+        marginBottom: Spacing.lg,
+        color: Colors.light.text,
     },
     statusButtons: {
-        gap: Spacing.sm,
+        gap: Spacing.md,
     },
     statusButton: {
-        paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.lg,
-        borderRadius: BorderRadius.md,
-        borderWidth: 2,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.md,
+        paddingVertical: Spacing.lg,
+        paddingHorizontal: Spacing.xl,
+        borderRadius: BorderRadius.lg,
+        borderWidth: 2,
     },
     statusButtonText: {
         fontSize: Typography.fontSize.base,
-        fontWeight: Typography.fontWeight.semibold,
+        fontWeight: Typography.fontWeight.bold,
+    },
+    overdueWarning: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        padding: Spacing.md,
+        borderRadius: BorderRadius.md,
+        borderWidth: 1,
+        marginTop: Spacing.lg,
+    },
+    overdueWarningText: {
+        flex: 1,
+        fontSize: Typography.fontSize.sm,
+        fontWeight: Typography.fontWeight.medium,
     },
     deleteButton: {
         marginTop: Spacing.sm,
@@ -492,11 +619,28 @@ const styles = StyleSheet.create({
     modalFooter: {
         flexDirection: 'row',
         padding: Spacing.lg,
+        paddingBottom: Spacing.xl,
         gap: Spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.1)',
+        borderTopWidth: 2,
+        borderTopColor: 'rgba(0, 0, 0, 0.08)',
     },
     footerButton: {
         flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    cancelButton: {
+        borderWidth: 2,
+        backgroundColor: 'transparent',
+    },
+    saveButton: {
+        // backgroundColor set dynamically
+    },
+    footerButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

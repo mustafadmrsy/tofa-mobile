@@ -29,6 +29,7 @@ export default function AdminLayout() {
                 name="teams"
                 options={{
                     title: 'Ekipler',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="people-circle-outline" size={size} color={color} />
                     ),
@@ -38,6 +39,7 @@ export default function AdminLayout() {
                 name="allTasks"
                 options={{
                     title: 'Tüm Görevler',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="list-outline" size={size} color={color} />
                     ),
@@ -47,6 +49,7 @@ export default function AdminLayout() {
                 name="users"
                 options={{
                     title: 'Kullanıcılar',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="person-add-outline" size={size} color={color} />
                     ),
@@ -56,6 +59,7 @@ export default function AdminLayout() {
                 name="profile"
                 options={{
                     title: 'Profil',
+                    headerShown: false,
                     tabBarIcon: ({ color, size }) => (
                         <Ionicons name="person-outline" size={size} color={color} />
                     ),

@@ -1,11 +1,11 @@
 import { showToast } from '@/components/ToastProvider';
-import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
-import { createTeam, getAllUsers, updateUserRole } from '@/services/firestoreService';
+import { createTeam, getAllTeams, getAllUsers, updateUserRole } from '@/services/firestoreService';
 import { User, UserRole } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
     Modal,
@@ -13,8 +13,16 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const getHeaderGradient = (colorScheme: 'light' | 'dark'): readonly [string, string, string] => {
+    if (colorScheme === 'dark') {
+        return ['#1e3a5f', '#2d4a6f', '#1a2f4a'] as const;
+    }
+    return ['#0066CC', '#0052A3', '#003D7A'] as const;
+};
 
 interface CreateTeamModalProps {
     visible: boolean;
@@ -25,6 +33,7 @@ interface CreateTeamModalProps {
 export function CreateTeamModal({ visible, onClose, onSuccess }: CreateTeamModalProps) {
     const { colorScheme } = useTheme();
     const colors = Colors[colorScheme];
+    const insets = useSafeAreaInsets();
 
     const [teamName, setTeamName] = useState('');
     const [selectedManager, setSelectedManager] = useState<User | null>(null);
@@ -41,8 +50,20 @@ export function CreateTeamModal({ visible, onClose, onSuccess }: CreateTeamModal
     const loadAvailableManagers = async () => {
         try {
             const allUsers = await getAllUsers();
-            // Tüm kullanıcılar ekip yöneticisi olabilir
-            setAvailableManagers(allUsers);
+            const allTeams = await getAllTeams();
+
+            // Mevcut ekip yöneticilerinin ID'lerini topla
+            const existingManagerIds = new Set(allTeams.map(team => team.managerId));
+
+            // Filtreleme: 
+            // 1. Süper admin olmayanlar
+            // 2. Henüz hiçbir ekibin yöneticisi olmayanlar
+            const eligibleUsers = allUsers.filter(user =>
+                user.role !== UserRole.SUPER_ADMIN &&
+                !existingManagerIds.has(user.id)
+            );
+
+            setAvailableManagers(eligibleUsers);
         } catch (error) {
             console.error('Load managers error:', error);
         }
@@ -94,34 +115,54 @@ export function CreateTeamModal({ visible, onClose, onSuccess }: CreateTeamModal
             visible={visible}
             animationType="slide"
             transparent
-            onRequestClose={handleClose}
+            statusBarTranslucent
+            onRequestClose={onClose}
         >
-            <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-                    {/* Header */}
-                    <View style={styles.modalHeader}>
-                        <Text style={[styles.modalTitle, { color: colors.text }]}>
-                            Yeni Ekip Oluştur
-                        </Text>
-                        <TouchableOpacity onPress={handleClose}>
-                            <Ionicons name="close" size={24} color={colors.text} />
+            <View style={[styles.modalOverlay, { paddingTop: insets.top }]}>
+                <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: insets.bottom }]}>
+                    {/* Gradient Header */}
+                    <LinearGradient
+                        colors={getHeaderGradient(colorScheme)}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.modalHeader}
+                    >
+                        <TouchableOpacity
+                            onPress={handleClose}
+                            style={styles.closeButton}
+                        >
+                            <Ionicons name="close" size={24} color="#FFFFFF" />
                         </TouchableOpacity>
-                    </View>
 
-                    <ScrollView style={styles.modalBody}>
+                        <View style={styles.headerContent}>
+                            <View style={styles.headerIcon}>
+                                <Ionicons name="people-circle" size={32} color="#FFFFFF" />
+                            </View>
+                            <Text style={styles.modalTitle}>Yeni Ekip Oluştur</Text>
+                            <Text style={styles.modalSubtitle}>Ekibinizi organize edin</Text>
+                        </View>
+                    </LinearGradient>
+
+                    <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                         {/* Team Name Input */}
-                        <Input
-                            label="Ekip Adı"
-                            placeholder="Örn: Yazılım Ekibi"
-                            value={teamName}
-                            onChangeText={setTeamName}
-                        />
+                        <View style={styles.inputContainer}>
+                            <View style={styles.inputLabel}>
+                                <Ionicons name="people-outline" size={20} color={colors.primary} />
+                                <Text style={[styles.label, { color: colors.text }]}>Ekip Adı</Text>
+                            </View>
+                            <Input
+                                placeholder="Örn: Yazılım Ekibi"
+                                value={teamName}
+                                onChangeText={setTeamName}
+                            />
+                        </View>
 
                         {/* Manager Picker */}
-                        <View style={styles.pickerContainer}>
-                            <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>
-                                Ekip Yöneticisi
-                            </Text>
+                        <View style={styles.inputContainer}>
+                            <View style={styles.inputLabel}>
+                                <Ionicons name="person-circle-outline" size={20} color={colors.primary} />
+                                <Text style={[styles.label, { color: colors.text }]}>Ekip Yöneticisi</Text>
+                            </View>
                             <TouchableOpacity
                                 style={[
                                     styles.pickerButton,
@@ -165,23 +206,32 @@ export function CreateTeamModal({ visible, onClose, onSuccess }: CreateTeamModal
                                     </ScrollView>
                                 </View>
                             )}
+
+                            <Text style={[styles.helpText, { color: colors.textSecondary }]}>
+                                ℹ️ Sadece henüz ekip lideri olmayanlar ve normal kullanıcılar listelenmektedir.
+                            </Text>
                         </View>
                     </ScrollView>
 
                     {/* Footer */}
-                    <View style={styles.modalFooter}>
-                        <Button
-                            title="İptal"
+                    <View style={[styles.modalFooter, { backgroundColor: colors.background }]}>
+                        <TouchableOpacity
                             onPress={handleClose}
-                            variant="outline"
-                            style={styles.footerButton}
-                        />
-                        <Button
-                            title="Oluştur"
+                            style={[styles.testButton, { borderColor: colors.primary, backgroundColor: 'transparent' }]}
+                        >
+                            <Text style={[styles.testButtonText, { color: colors.primary }]}>İptal</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
                             onPress={handleCreate}
-                            loading={loading}
-                            style={styles.footerButton}
-                        />
+                            style={[styles.testButton, { backgroundColor: colors.primary }]}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <Text style={[styles.testButtonText, { color: '#FFFFFF' }]}>Yükleniyor...</Text>
+                            ) : (
+                                <Text style={[styles.testButtonText, { color: '#FFFFFF' }]}>Oluştur</Text>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
             </View>
@@ -198,22 +248,70 @@ const styles = StyleSheet.create({
     modalContent: {
         borderTopLeftRadius: BorderRadius.xl,
         borderTopRightRadius: BorderRadius.xl,
-        maxHeight: '80%',
+        maxHeight: '90%',
     },
     modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+        paddingTop: Spacing.xl,
+        paddingBottom: Spacing.lg,
+        borderTopLeftRadius: BorderRadius.xl,
+        borderTopRightRadius: BorderRadius.xl,
+    },
+    closeButton: {
+        position: 'absolute',
+        top: Spacing.md,
+        left: Spacing.md,
+        zIndex: 10,
+        width: 40,
+        height: 40,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         alignItems: 'center',
-        padding: Spacing.lg,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+        justifyContent: 'center',
+    },
+    headerContent: {
+        alignItems: 'center',
+    },
+    headerIcon: {
+        width: 64,
+        height: 64,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: Spacing.md,
     },
     modalTitle: {
-        fontSize: Typography.fontSize.xl,
+        fontSize: Typography.fontSize['2xl'],
         fontWeight: Typography.fontWeight.bold,
+        color: '#FFFFFF',
+        marginBottom: Spacing.xs,
+    },
+    modalSubtitle: {
+        fontSize: Typography.fontSize.sm,
+        color: '#FFFFFF',
+        opacity: 0.9,
     },
     modalBody: {
         padding: Spacing.lg,
+        paddingTop: Spacing.md,
+    },
+    inputContainer: {
+        marginBottom: Spacing.lg,
+    },
+    inputLabel: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    label: {
+        fontSize: Typography.fontSize.sm,
+        fontWeight: Typography.fontWeight.semibold,
+    },
+    helpText: {
+        fontSize: Typography.fontSize.xs,
+        marginTop: Spacing.sm,
+        fontStyle: 'italic',
     },
     pickerContainer: {
         marginTop: Spacing.md,
@@ -260,11 +358,27 @@ const styles = StyleSheet.create({
     modalFooter: {
         flexDirection: 'row',
         padding: Spacing.lg,
+        paddingBottom: Spacing.xl,
         gap: Spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.1)',
+        borderTopWidth: 2,
+        borderTopColor: 'rgba(0, 0, 0, 0.08)',
+        borderBottomLeftRadius: BorderRadius.xl,
+        borderBottomRightRadius: BorderRadius.xl,
     },
     footerButton: {
         flex: 1,
+    },
+    testButton: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    testButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
     },
 });

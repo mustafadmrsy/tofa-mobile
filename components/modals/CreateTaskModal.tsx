@@ -1,4 +1,4 @@
-import { Button } from '@/components/ui/Button';
+import { showToast } from '@/components/ToastProvider';
 import { Input } from '@/components/ui/Input';
 import { BorderRadius, Colors, Spacing, Typography } from '@/constants/theme';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -14,6 +14,7 @@ import {
 import { TaskStatus, User } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
     Modal,
@@ -22,8 +23,16 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const getHeaderGradient = (colorScheme: 'light' | 'dark'): readonly [string, string, string] => {
+    if (colorScheme === 'dark') {
+        return ['#1e3a5f', '#2d4a6f', '#1a2f4a'] as const;
+    }
+    return ['#0066CC', '#0052A3', '#003D7A'] as const;
+};
 
 interface CreateTaskModalProps {
     visible: boolean;
@@ -42,6 +51,7 @@ export function CreateTaskModal({
 }: CreateTaskModalProps) {
     const { colorScheme } = useTheme();
     const colors = Colors[colorScheme];
+    const insets = useSafeAreaInsets();
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -137,45 +147,70 @@ export function CreateTaskModal({
             visible={visible}
             animationType="slide"
             transparent
+            statusBarTranslucent
             onRequestClose={handleClose}
         >
-            <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, { backgroundColor: colors.card }]}>
-                    {/* Header */}
-                    <View style={styles.modalHeader}>
-                        <Text style={[styles.modalTitle, { color: colors.text }]}>
-                            Yeni Görev Oluştur
-                        </Text>
-                        <TouchableOpacity onPress={handleClose}>
-                            <Ionicons name="close" size={24} color={colors.text} />
+            <View style={[styles.modalOverlay, { paddingTop: insets.top }]}>
+                <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: insets.bottom }]}>
+                    {/* Gradient Header */}
+                    <LinearGradient
+                        colors={getHeaderGradient(colorScheme)}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.modalHeader}
+                    >
+                        <TouchableOpacity
+                            onPress={handleClose}
+                            style={styles.closeButton}
+                        >
+                            <Ionicons name="close" size={24} color="#FFFFFF" />
                         </TouchableOpacity>
-                    </View>
 
-                    <ScrollView style={styles.modalBody}>
+                        <View style={styles.headerContent}>
+                            <View style={styles.headerIcon}>
+                                <Ionicons name="clipboard" size={32} color="#FFFFFF" />
+                            </View>
+                            <Text style={styles.modalTitle}>Yeni Görev Oluştur</Text>
+                            <Text style={styles.modalSubtitle}>Ekibiniz için görev atayın</Text>
+                        </View>
+                    </LinearGradient>
+
+                    <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                         {/* Title Input */}
-                        <Input
-                            label="Görev Başlığı"
-                            placeholder="Örn: API entegrasyonu yap"
-                            value={title}
-                            onChangeText={setTitle}
-                        />
+                        <View style={styles.inputContainer}>
+                            <View style={styles.inputLabel}>
+                                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+                                <Text style={[styles.label, { color: colors.text }]}>Görev Başlığı</Text>
+                            </View>
+                            <Input
+                                placeholder="Örn: API entegrasyonu yap"
+                                value={title}
+                                onChangeText={setTitle}
+                            />
+                        </View>
 
                         {/* Description Input */}
-                        <Input
-                            label="Açıklama (Opsiyonel)"
-                            placeholder="Görev detaylarını açıklayın"
-                            value={description}
-                            onChangeText={setDescription}
-                            multiline
-                            numberOfLines={4}
-                            style={styles.textArea}
-                        />
+                        <View style={styles.inputContainer}>
+                            <View style={styles.inputLabel}>
+                                <Ionicons name="list-outline" size={20} color={colors.primary} />
+                                <Text style={[styles.label, { color: colors.text }]}>Açıklama (Opsiyonel)</Text>
+                            </View>
+                            <Input
+                                placeholder="Görev detaylarını açıklayın"
+                                value={description}
+                                onChangeText={setDescription}
+                                multiline
+                                numberOfLines={4}
+                                style={styles.textArea}
+                            />
+                        </View>
 
                         {/* Assigned User Picker */}
-                        <View style={styles.pickerContainer}>
-                            <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>
-                                Atanacak Kişi
-                            </Text>
+                        <View style={styles.inputContainer}>
+                            <View style={styles.inputLabel}>
+                                <Ionicons name="person-outline" size={20} color={colors.primary} />
+                                <Text style={[styles.label, { color: colors.text }]}>Atanacak Kişi</Text>
+                            </View>
                             <TouchableOpacity
                                 style={[
                                     styles.pickerButton,
@@ -222,10 +257,11 @@ export function CreateTaskModal({
                         </View>
 
                         {/* Due Date Picker */}
-                        <View style={styles.pickerContainer}>
-                            <Text style={[styles.pickerLabel, { color: colors.textSecondary }]}>
-                                Bitiş Tarihi
-                            </Text>
+                        <View style={styles.inputContainer}>
+                            <View style={styles.inputLabel}>
+                                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                                <Text style={[styles.label, { color: colors.text }]}>Bitiş Tarihi</Text>
+                            </View>
                             <TouchableOpacity
                                 style={[
                                     styles.pickerButton,
@@ -254,19 +290,24 @@ export function CreateTaskModal({
                     </ScrollView>
 
                     {/* Footer */}
-                    <View style={styles.modalFooter}>
-                        <Button
-                            title="İptal"
+                    <View style={[styles.modalFooter, { backgroundColor: colors.background }]}>
+                        <TouchableOpacity
                             onPress={handleClose}
-                            variant="outline"
-                            style={styles.footerButton}
-                        />
-                        <Button
-                            title="Oluştur"
+                            style={[styles.testButton, { borderColor: colors.primary, backgroundColor: 'transparent' }]}
+                        >
+                            <Text style={[styles.testButtonText, { color: colors.primary }]}>İptal</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
                             onPress={handleCreate}
-                            loading={loading}
-                            style={styles.footerButton}
-                        />
+                            style={[styles.testButton, { backgroundColor: colors.primary }]}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <Text style={[styles.testButtonText, { color: '#FFFFFF' }]}>Yükleniyor...</Text>
+                            ) : (
+                                <Text style={[styles.testButtonText, { color: '#FFFFFF' }]}>Oluştur</Text>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
             </View>
@@ -286,31 +327,74 @@ const styles = StyleSheet.create({
         maxHeight: '90%',
     },
     modalHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+        paddingTop: Spacing.xl,
+        paddingBottom: Spacing.lg,
+        borderTopLeftRadius: BorderRadius.xl,
+        borderTopRightRadius: BorderRadius.xl,
+    },
+    closeButton: {
+        position: 'absolute',
+        top: Spacing.md,
+        left: Spacing.md,
+        zIndex: 10,
+        width: 40,
+        height: 40,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
         alignItems: 'center',
-        padding: Spacing.lg,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0, 0, 0, 0.1)',
+        justifyContent: 'center',
+    },
+    headerContent: {
+        alignItems: 'center',
+    },
+    headerIcon: {
+        width: 64,
+        height: 64,
+        borderRadius: BorderRadius.full,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: Spacing.md,
     },
     modalTitle: {
-        fontSize: Typography.fontSize.xl,
+        fontSize: Typography.fontSize['2xl'],
         fontWeight: Typography.fontWeight.bold,
+        color: '#FFFFFF',
+        marginBottom: Spacing.xs,
+    },
+    modalSubtitle: {
+        fontSize: Typography.fontSize.sm,
+        color: '#FFFFFF',
+        opacity: 0.9,
     },
     modalBody: {
         padding: Spacing.lg,
+        paddingTop: Spacing.md,
+    },
+    inputContainer: {
+        marginBottom: Spacing.lg,
+    },
+    inputLabel: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    label: {
+        fontSize: Typography.fontSize.sm,
+        fontWeight: Typography.fontWeight.semibold,
     },
     textArea: {
         minHeight: 100,
         textAlignVertical: 'top',
     },
     pickerContainer: {
-        marginTop: Spacing.md,
+        marginBottom: Spacing.lg,
     },
     pickerLabel: {
         fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.medium,
-        marginBottom: Spacing.xs,
+        fontWeight: Typography.fontWeight.semibold,
+        marginBottom: Spacing.sm,
     },
     pickerButton: {
         flexDirection: 'row',
@@ -354,11 +438,27 @@ const styles = StyleSheet.create({
     modalFooter: {
         flexDirection: 'row',
         padding: Spacing.lg,
+        paddingBottom: Spacing.xl,
         gap: Spacing.md,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(0, 0, 0, 0.1)',
+        borderTopWidth: 2,
+        borderTopColor: 'rgba(0, 0, 0, 0.08)',
+        borderBottomLeftRadius: BorderRadius.xl,
+        borderBottomRightRadius: BorderRadius.xl,
     },
     footerButton: {
         flex: 1,
+    },
+    testButton: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 12,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    testButtonText: {
+        fontSize: 16,
+        fontWeight: '600',
     },
 });
